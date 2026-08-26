@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Filter decision — the input-filter gate's record of whether an inbound message reached the engine",
+  "description": "Written into _report/state.json under the \"filter\" key by scripts/filter_gate.py. `code` and `route` are the closed vocabulary declared by reference/filter_signals.json's `categories` list (t1); both admit null for the pass-through case, where nothing was filtered so there is no category to report. `reason` is a separate closed vocabulary explaining WHY a message passed through (or was forced through), independent of the category vocabulary used when a message is filtered.",
+  "type": "object",
+  "required": [
+    "filtered",
+    "input"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "filtered": {
+      "type": "boolean",
+      "description": "true if the gate stopped the run before the engine; false if the message reached (or will reach) the engine."
+    },
+    "input": {
+      "type": "string",
+      "description": "The exact input path the gate was given — unmodified, so a filtered message can be identified and replayed (C6)."
+    },
+    "code": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "DELIVERY_STATUS_NOTIFICATION",
+        "AUTO_REPLY",
+        "BULK_MAILING",
+        "INVOICE_OR_STATEMENT",
+        "BARE_ACKNOWLEDGEMENT",
+        "INTERNAL_CHATTER",
+        null
+      ],
+      "description": "The matched filter category, or null when the message was not filtered. Deliberately SCREAMING_SNAKE like open_items[].code, but a disjoint set of values."
+    },
+    "route": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "no_action",
+        "accounts_payable",
+        "inside_sales_fyi",
+        "internal_ops",
+        null
+      ],
+      "description": "Where a filtered message should go, or null when the message was not filtered. Deliberately disjoint from open_items[].route and routing.recommendation, so a consumer can never mistake a filtered message for a routed-but-undrafted case."
+    },
+    "evidence": {
+      "type": "string",
+      "maxLength": 80,
+      "description": "Short verbatim signal that drove the decision (a header value or matched phrase)."
+    },
+    "override": {
+      "type": "boolean",
+      "description": "true when --no-filter (or a recorded screen.override) forced the message through despite matching a filter category."
+    },
+    "reason": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "quoting_request_detected",
+        "no_evidence",
+        "parse_failed",
+        "override",
+        null
+      ],
+      "description": "Short machine token for why a pass-through happened. Null when the message was filtered."
+    }
+  }
+}
