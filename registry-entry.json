@@ -1,16 +1,21 @@
 {
-  "id": "{{KIT_ID}}",
-  "name": "{{KIT_DISPLAY_NAME}}",
-  "description": "{{DESCRIPTION}}",
+  "id": "email-to-bom",
+  "name": "Email to BOM",
+  "description": "Read an inbound customer RFQ email and produce a deterministic CaseState plus a draft bill of materials, with every missing, ambiguous or unsafe item raised as an explicit open item. Drafts only - a human reviews and commits in the ERP.",
   "version": "0.1.0",
   "tags": [
-    "{{TAG_1}}",
-    "{{TAG_2}}"
+    "rfq",
+    "bill-of-materials",
+    "quoting",
+    "email-intake",
+    "manufacturing"
   ],
-  "category": "{{CATEGORY}}",
+  "category": "sales-operations",
   "triggers": [
-    "{{TRIGGER_1}}",
-    "{{TRIGGER_2}}"
+    "draft a BOM from this RFQ",
+    "what does this customer RFQ need before we can quote it?",
+    "extract the case from this customer email",
+    "quote this hose assembly request"
   ],
   "provides": {
     "instructions": [
@@ -20,10 +25,16 @@
       "EXAMPLES.md"
     ],
     "scripts": [
-      "generate_report.py"
+      "generate_report.py",
+      "scripts/run_engine.py"
     ],
-    "schemas": [],
-    "references": []
+    "schemas": [
+      "schemas/case_state.schema.json"
+    ],
+    "references": [
+      "vendor/PROVENANCE.md",
+      "vendor/config/citations.json"
+    ]
   },
   "requires": {
     "tools": [],
@@ -33,18 +44,21 @@
     "astro": ">=0.3.0"
   },
   "outputs": {
-    "format": "{{OUTPUT_FORMAT}}",
+    "format": "json",
     "artifacts": [
       {
-        "path": "_report/{{PRIMARY_ARTIFACT}}",
+        "path": "_report/case_state.json",
         "tags": [
           "email_attachment"
         ]
+      },
+      {
+        "path": "_report/bom_draft.md"
       }
     ]
   },
-  "estimated_duration": "{{DURATION}}",
-  "download_url": "https://TODO.example/{{KIT_ID}}/dist/kit.zip",
+  "estimated_duration": "under 1 minute",
+  "download_url": "",
   "sha256": "8471b31573329d6317de0983f8ca99fb82439ec952c2ab7423a3dca04160d7f2",
   "contract_version": "^1.0.0",
   "manifest_version": 4
