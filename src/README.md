@@ -37,13 +37,21 @@ rfq.eml --coc
 rfq.eml --config-dir /path/to/erp-backed-config
 ```
 
-To run it directly instead, the kit ships no console script — invoke the two
-phase scripts with `python3` (no install, no dependencies):
+To run it directly instead, the kit ships no console script — invoke the
+phase scripts with `python3` (no install, no dependencies). An input filter
+gate runs first and decides, without invoking the engine, whether the
+message is even worth a run:
 
 ```
+python3 scripts/filter_gate.py --in rfq.eml --state _report/state.json
 python3 scripts/run_engine.py --in rfq.eml --out _report/case_state.json --state _report/state.json
 python3 generate_report.py --out _report/bom_draft.md --state _report/state.json
 ```
+
+`filter_gate.py` exits `0` (not filtered — continue) or `3` (filtered —
+nothing to quote; stop here, no CaseState or draft is produced) or `1` (the
+gate's own failure). Pass `--no-filter` to force a message through despite
+the gate's own decision.
 
 The second command needs no flags: the invocation is recorded in
 `_report/state.json` and phase 2 replays it. Before writing, it re-derives the
@@ -68,12 +76,19 @@ quietly wrong.**
   stock questions are acknowledged and routed to a human.
 - Exit code **2** — "a draft with open items" — is the normal outcome. Exit 0 is
   reserved and in practice unreachable. Treating 2 as an error upstream is a bug.
+- The input filter never silently discards a message. It decides, before the
+  engine runs, whether a message looks like a bounce, an auto-reply, bulk
+  mail, an invoice, a bare acknowledgement or internal chatter — and fails
+  toward running the engine on anything it cannot resolve confidently. Every
+  filtered message leaves a machine-readable record of what it was and why,
+  and `--no-filter` always lets an operator force a run through by hand.
 
 ## What is inside
 
 | Path | Role |
 |---|---|
-| `recipes/mcgill-email-to-bom.yaml` | The execution contract: `prepare` → `extract_case` → `generate_report`. |
+| `recipes/mcgill-email-to-bom.yaml` | The execution contract: `prepare` → `screen_input` → `extract_case` → `generate_report`. |
+| `scripts/filter_gate.py` | The input-filter gate: decides, before the engine runs, whether a message is worth handing to it. Never invokes the engine. |
 | `scripts/run_engine.py` | Thin wrapper: runs the vendored engine, writes the CaseState verbatim. |
 | `generate_report.py` | Thin wrapper: writes the human-readable draft verbatim. |
 | `schemas/case_state.schema.json` | The CaseState contract, including the full open-item code vocabulary. |

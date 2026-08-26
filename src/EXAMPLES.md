@@ -86,6 +86,30 @@ convention or hose selection.
 **Produces:** `_report/case_state.json` with `request_class` set and a routing
 recommendation; `_report/bom_draft.md`.
 
+### 5. A message that is not a request at all
+
+**Prompt:** "What does this email need?"
+
+**Arguments:** `newsletter.eml` (e.g. a bulk mailing, an auto-reply, a delivery-status
+bounce, an invoice/statement, a bare "thanks, got it.", or internal chatter)
+
+**Expected workflow:**
+1. `prepare` — resolves `newsletter.eml`, writes `_report/state.json`.
+2. `screen_input` — `scripts/filter_gate.py` decides BEFORE the engine runs,
+   without invoking it, and exits `3`: nothing to quote. **The run STOPS
+   here.** Read the `filter` record `screen_input` wrote into
+   `_report/state.json` and report its `code` (one of
+   `DELIVERY_STATUS_NOTIFICATION`, `AUTO_REPLY`, `BULK_MAILING`,
+   `INVOICE_OR_STATEMENT`, `BARE_ACKNOWLEDGEMENT`, `INTERNAL_CHATTER`), its
+   `route` and the `input` path, in plain language. Mention `--no-filter` as
+   the override if the requester believes this is a false positive.
+3. `extract_case` and `generate_report` never run.
+
+**Produces:** nothing new under `_report/` beyond `state.json`'s `filter`
+record — no `_report/case_state.json`, no `_report/bom_draft.md`. If a
+previous run's artifacts existed in this directory, they are gone too (a
+filtered run is never left sitting beside a stale draft).
+
 ## Argument Reference
 
 | Argument | Type | Default | Description |
@@ -94,6 +118,7 @@ recommendation; `_report/bom_draft.md`.
 | `--component-ids` | list of strings | none | Component IDs an operator has already confirmed. Matched case-insensitively against the catalog; hits become BOM lines, misses become blocking asks. Also forces `hose_assembly` classification. |
 | `--coc` | flag | off | The customer requires a Certificate of Conformance. |
 | `--config-dir` | path | shipped `vendor/config/` | An alternate rules/catalog/citations directory — e.g. one backed by the P21 item master. |
+| `--no-filter` | flag | off | Force the input filter (`screen_input`, `scripts/filter_gate.py`) to pass this message through to the engine regardless of its own decision — the documented escape hatch for a false positive. Never edit the message or kit source to get past the gate; use this flag. |
 
 ## Common Patterns
 
@@ -133,6 +158,27 @@ recommendation; `_report/bom_draft.md`.
   `resolve_component` op. Do not build a branch for either. The schema is kept
   byte-identical to the source's contract rather than corrected here, so the fix
   belongs upstream.
+- **The filter gate runs before the engine and has its own exit codes — `3`
+  is not an error.** `scripts/filter_gate.py` (phase `screen_input`) exits
+  `0` (not filtered — continue), `3` (filtered — nothing to quote, STOP the
+  run) or `1` (the gate's own failure: bad usage, unreadable input,
+  unwritable state). The gate never emits the engine's own `2`; treat `3`
+  the same way you treat the engine's `2` — a normal, expected outcome, not
+  a failure.
+- **The filter fails toward running the engine.** Everything the gate cannot
+  resolve confidently — no text obtained, a parse defect, an HTML-only body
+  over its scan budget, an unrecognised or undecodable part, an undeclared
+  code/route, unreadable reference data — resolves to *not filtered*, so a
+  real RFQ is never silently dropped for being ambiguous. Only a hard input
+  error (the path itself missing or unreadable) is loud and stops the run.
+- **Direct, without Astro, the documented sequence runs the gate first.**
+  ```
+  python3 scripts/filter_gate.py --in rfq.eml --state _report/state.json
+  ```
+  Exit `0` → continue with `run_engine.py` then `generate_report.py` as in
+  Quick Start. Exit `3` → stop; nothing else runs. Pass `--no-filter` on the
+  `filter_gate.py` command to force pass-through for a message you know is a
+  real request.
 - **Multi-kit workflows:** feed `case_state.json` to a conversation layer to run
   the customer dialogue (it is designed for exactly that — every open item carries
   a priority and a route), and keep the raw JSON with the case record for audit.
