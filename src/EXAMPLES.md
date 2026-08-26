@@ -9,7 +9,7 @@ rfq.eml
 ```
 
 Reads one RFQ email and produces `_report/case_state.json` (the machine contract,
-attached to email replies) plus `_report/bom_draft.md` (the readable draft).
+not attached — the reply carries the case inline) plus `_report/bom_draft.md` (the readable draft).
 
 Directly, without Astro (the kit ships no console script):
 
@@ -125,8 +125,8 @@ order.
   is reserved and in practice unreachable.
 - **`case_state.json` is the contract; `bom_draft.md` is a view.** The rendering
   drops `fields`, `routing`, `knowledge` and `supersedes`, and keeps only the code
-  and ask from each open item. Anything programmatic must read the JSON — which is
-  why the JSON is the email attachment.
+  and ask from each open item. Anything programmatic must read the JSON — which is why
+  the reply states it in words instead of attaching JSON.
 - **`reading` ≠ captured.** A field with status `reading` means the engine saw a
   value but refuses to commit to it (ambiguous units like bare `bar`, or a bare
   `F`/`C`). It must be confirmed, never assumed. Same for `assumed`.

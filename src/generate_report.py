@@ -31,7 +31,8 @@ Three defences keep this artifact from ever disagreeing with the CaseState:
 Note the rendering is deliberately LOSSY next to the CaseState: it drops
 ``fields``, ``routing``, ``knowledge``, ``supersedes`` and every open-item
 attribute except the code and the ask. ``case_state.json`` -- not this file -- is
-the integration contract and the kit's email attachment.
+the integration contract, and ``scripts/render_reply.py`` renders the whole case
+for a human. The kit attaches NOTHING: the reply body carries it.
 
 Exit codes -- ONLY these two, enforced by the clamp in ``__main__``:
     0  draft written and reconciled

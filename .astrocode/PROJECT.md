@@ -379,6 +379,40 @@ removal round was predicted to leave it. **Mutation survival: 18 of 36.**
   removal commit never touched the file — the "missed the sibling" shape for the eleventh
   time.
 
+### Round 32 (blind verification) — FAIL, and what it changed
+
+Round 32 verified the inline-reply feature and returned FAIL with two CRITICALs and four
+HIGHs. **Mutation survival 33 of 51 (65%) — the worst recorded — and 28 of the 33 were in
+`render_reply.py`, the file that is now the only artifact a human reads.**
+
+- REQ-064 Untrusted text is rendered inert. C-1: an email line beginning `\x1b[2K\x1b[G`
+  erased the reply's attribution prefix in any terminal or pager and rendered customer
+  text byte-identically to the kit's own checkpoint lines — a customer could display a
+  checkpoint as CLEARED. Every value now passes through `_safe()`, which strips whole
+  ANSI sequences and all control characters and folds the result to one line. The
+  invariant under test is structural: no line may imitate the checkpoint format unless it
+  IS a checkpoint.
+- REQ-065 Every record is rendered whole. C-2/H-2: `open_items` went through a
+  hand-written three-key whitelist — the exact R26-F6 shape `run_state.py` claims was
+  eliminated — so a `CAPABILITY_ANSWER_READY` item lost both the customer's question and
+  the catalog answer, leaving "propose these" with no referent, and `tier`, `citation`,
+  `candidates`, `context_text` were dropped. `fields` and `routing` had already been
+  hardened; `open_items` was the missed sibling, the twelfth occurrence. Checkpoints and
+  off-column BOM data were fixed in the same pass rather than waiting to be named.
+- REQ-066 The reply reconciles, and fails closed. H-1: `generate_report.py` refused an
+  edited CaseState and exited 1, and `render_reply.py` then exited 0 and wrote a
+  confident reply — zero open items, every checkpoint CLEARED, a fabricated price —
+  beneath its own footer swearing no price appears.
+- REQ-067 A check must exercise the shape it claims to test. H-3: six checks could not
+  fail, and three of the author's replacements still could not, because engine-produced
+  fixtures never carried the data — one passed by pure coincidence, matching a route
+  string that also appears in the "Route to:" line. A synthetic CaseState now carries
+  every shape (extra record keys, off-column data, ANSI, bare CR/BS) with distinctive
+  `MUST-APPEAR-*` tokens.
+- Round 32 also adjudicated round 31's F-3 in the author's favour: removing the exit
+  clamp alone does not leak exit 2, because `__main__`'s broad catch handles `SystemExit`
+  first. The property is covered — by the broad catch, not the clamp.
+
 ## Constraints
 
 - **Never edit `src/vendor/`** to change an outcome. It is a stamped verbatim copy;

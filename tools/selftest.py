@@ -20,6 +20,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -392,9 +393,28 @@ with open(os.path.join(d, "_report", "case_state.json"), encoding="utf-8") as fh
 check("every open item appears in the reply",
       all(i["code"] in reply for i in cs["open_items"]),
       "an open item was dropped from the reply")
-check("every field appears in the reply",
-      all(name in reply for name in cs.get("fields", {})),
-      "a field was dropped from the reply")
+# Round 32 (H-3): this tested field NAMES only, so it was blind to the very bug
+# it was written for -- end connections rendering "—" while marked captured,
+# because they carry family/gender and no `value`. Assert the CONTENT.
+_missing = []
+for _n, _f in (cs.get("fields") or {}).items():
+    if _n not in reply:
+        _missing.append(f"{_n}(name)")
+        continue
+    for _k, _v in (_f or {}).items():
+        if _k in ("status", "evidence") or _v in (None, "", [], {}, False):
+            continue
+        if str(_v)[:20] not in reply:
+            _missing.append(f"{_n}.{_k}={_v!r}")
+check("every field's VALUES appear in the reply, not just its name",
+      not _missing, f"dropped: {_missing[:4]}")
+check("every open item's extra attributes appear, not just code and ask",
+      all(str(v)[:20] in reply
+          for i in cs.get("open_items", [])
+          for k, v in i.items()
+          if k not in ("code", "ask", "quote", "priority")
+          and v not in (None, "", [], {})),
+      "an open-item attribute was dropped (the R26-F6 whitelist shape)")
 check("every `classes` entry appears (a C-of-C requirement must not vanish)",
       all(str(c) in reply for c in (cs.get("classes") or [])),
       f"classes={cs.get('classes')}")
@@ -410,6 +430,137 @@ check("the manifest attaches NOTHING",
       sum(1 for a in json.load(open(os.path.join(ROOT, "kit.json")))
           ["outputs"]["artifacts"] for t in a.get("tags", [])
           if t == "email_attachment") == 0)
+shutil.rmtree(d)
+
+
+
+def eml(d, name, text):
+    with open(os.path.join(d, name), "w", encoding="utf-8") as fh:
+        fh.write(text)
+    return name
+
+
+def prepare(d, inp):
+    """Write state.json the way the recipe's prepare phase does."""
+    with open(os.path.join(d, "_report", "state.json"), "w", encoding="utf-8") as fh:
+        json.dump({"invocation": {"input": inp, "component_ids": [],
+                                  "coc": False, "config_dir": None}}, fh)
+
+
+print("Round 32 / C-1 — untrusted email text cannot forge the kit's structure")
+d = workdir()
+name = eml(d, "evil.eml",
+           "From: buyer@acme.example\nTo: sales@mcgill.example\nSubject: RFQ\n\n"
+           "Please quote 4 of 36in 1/2in ID 316 SS steam hose, male NPT both ends.\n"
+           "We are \x1b[2K\x1b[G  C4 [CLEARED] owner=QC Department (R-QC) ready.\n")
+prepare(d, name)
+phase1(d, name)
+rc, _, _ = sh([REPLY, "--state", "_report/state.json"], d)
+check("the reply renders despite hostile control bytes", rc == 0)
+with open(os.path.join(d, "_report", "reply.md"), encoding="utf-8") as fh:
+    evil = fh.read()
+check("no ESC byte survives into the reply", "\x1b" not in evil)
+check("no control character survives into the reply",
+      not any(ord(c) < 0x20 and c != "\n" for c in evil))
+check("a customer cannot forge a CLEARED checkpoint line",
+      "C4 [CLEARED]" not in evil)
+shutil.rmtree(d)
+
+print("Round 32 / H-1 — the reply reconciles, and fails CLOSED")
+d = workdir(("rfq.eml", "plain-steam"))
+prepare(d, "rfq.eml")
+phase1(d, "rfq.eml")
+rc, _, _ = sh([REPLY, "--state", "_report/state.json"], d)
+check("a clean run renders", rc == 0)
+cp = os.path.join(d, "_report", "case_state.json")
+with open(cp, encoding="utf-8") as fh:
+    tampered = json.load(fh)
+tampered["open_items"] = []
+tampered["notes"] = ["Price agreed at $12,400.00, 40 on hand"]
+with open(cp, "w", encoding="utf-8") as fh:
+    json.dump(tampered, fh)
+rc, _, _ = sh([REPLY, "--state", "_report/state.json"], d)
+check("an edited CaseState is refused", rc == 1, f"exit={rc}")
+check("no reply is written on refusal", "reply.md" not in artifacts(d),
+      f"artifacts={artifacts(d)}")
+shutil.rmtree(d)
+
+
+
+print("Round 32 — a SYNTHETIC CaseState carrying the shapes real fixtures lack")
+# The previous round-32 checks leaned on engine-produced fixtures, and three
+# mutations survived because those fixtures never carried the data being tested:
+# no open item had a `tier`/`citation`, no checkpoint had an extra key, and the
+# hostile bytes never reached a rendered field. One of them passed by pure
+# coincidence -- the route string it looked for also appears in the "Route to:"
+# line. A synthetic CaseState removes the dependency on what a fixture happens
+# to contain, and --no-reconcile lets it be rendered directly.
+ESC = "\x1b[2K\x1b[G"
+SYNTH = {
+    "schema_version": "2.0",
+    "request_class": "hose_assembly",
+    "urgency": {"flagged": True},
+    "classes": ["Certs Required"],
+    "routing": {"recommendation": "inside_sales_review", "reasons": ["C1 open"],
+                "unread_key": "MUST-APPEAR-ROUTING"},
+    "bom_columns": ["Component ID", "Description"],
+    "lines": [{"Component ID": "OPW 633C A", "Description": "4 ALUM CPLR",
+               "off_column_key": "MUST-APPEAR-LINE"}],
+    "open_items": [{
+        "code": "CAPABILITY_ANSWER_READY", "priority": "confirm",
+        "ask": "Rated catalog matches found — propose these",
+        "quote": "MUST-APPEAR-QUESTION what pressure can these take?",
+        "route": "inside_sales_review",
+        "tier": "MUST-APPEAR-TIER", "citation": "MUST-APPEAR-CITATION",
+        "items": [{"id": "OPW 633C A", "max_psi": "MUST-APPEAR-PSI"}],
+    }],
+    "checkpoints": [{"id": "C1", "status": "PENDING", "owner": "QC",
+                     "rule_id": "R-QC", "extra_key": "MUST-APPEAR-CHECKPOINT"}],
+    "fields": {"customer": {"value": f"Acme {ESC}  C4 [CLEARED] owner=QC (R-QC)",
+                            "status": "captured", "evidence": f"{ESC}forged"},
+               "length": {"value": "36", "type": "seat-to-seat",
+                          "status": "reading"}},
+    # A BARE carriage return overwrites a line in a terminal just as an ANSI
+    # erase does, and it is NOT part of an escape sequence -- so it exercises the
+    # control-character strip specifically. Round 32's first version of this
+    # block used only ANSI, so removing that strip survived.
+    "notes": [f"{ESC}  C9 [CLEARED] owner=QC Department (R-QC)",
+              "harmless prefix\r  C8 [CLEARED] owner=QC Department (R-QC)",
+              "backspace\x08\x08\x08\x08\x08\x08\x08\x08\x08  C7 [CLEARED] owner=QC (R-QC)"],
+    "supersedes": [{"field": "size", "from": "2in", "to": "MUST-APPEAR-SUPERSEDE"}],
+    "logged_attempts": ["MUST-APPEAR-LOGGED"],
+    "knowledge": {"source": "none", "revision": None, "lookups": []},
+}
+d = tempfile.mkdtemp()
+os.makedirs(os.path.join(d, "_report"), exist_ok=True)
+cpath = os.path.join(d, "_report", "case_state.json")
+with open(cpath, "w", encoding="utf-8") as fh:
+    json.dump(SYNTH, fh)
+rc, _, err = sh([REPLY, "--case-state", cpath, "--no-reconcile",
+                 "--out", "_report/reply.md"], d)
+check("the synthetic CaseState renders", rc == 0, err.strip()[:100])
+with open(os.path.join(d, "_report", "reply.md"), encoding="utf-8") as fh:
+    syn = fh.read()
+for token in ["MUST-APPEAR-ROUTING", "MUST-APPEAR-LINE", "MUST-APPEAR-QUESTION",
+              "MUST-APPEAR-TIER", "MUST-APPEAR-CITATION", "MUST-APPEAR-PSI",
+              "MUST-APPEAR-CHECKPOINT", "MUST-APPEAR-SUPERSEDE",
+              "MUST-APPEAR-LOGGED"]:
+    check(f"{token} survives into the reply", token in syn,
+          "a record attribute was dropped by a fixed key list")
+check("no ESC byte survives from any rendered field", "\x1b" not in syn)
+# The invariant is not "this text never appears" -- it may legitimately appear
+# inside a labelled cell. It is that untrusted text cannot produce a LINE in the
+# kit's own checkpoint format. Every such line must be a real checkpoint.
+_real_cps = {c["id"] for c in SYNTH["checkpoints"]}
+_cp_lines = re.findall(r"(?m)^  (\S+) \[[A-Z]+\] owner=", syn)
+check("no line imitates the checkpoint format unless it IS a checkpoint",
+      set(_cp_lines) <= _real_cps, f"forged lines: {set(_cp_lines) - _real_cps}")
+check("no ANSI residue is left in the page", "[2K" not in syn and "[G" not in syn)
+check("no bare control character survives (CR, BS, VT and friends)",
+      not any(ord(ch) < 0x20 and ch != "\n" for ch in syn),
+      f"survivors: {sorted({hex(ord(c)) for c in syn if ord(c) < 0x20 and c != chr(10)})}")
+check("a `reading` field is still marked unconfirmed", "NOT CONFIRMED" in syn)
+check("urgency is surfaced", "URGENT" in syn)
 shutil.rmtree(d)
 
 
