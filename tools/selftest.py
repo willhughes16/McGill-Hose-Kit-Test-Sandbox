@@ -248,6 +248,15 @@ d = workdir(("rfq.eml", "confirmed-ids"))
 # engine's argparse is ever reached and this case proves nothing.
 shutil.copy(os.path.join(d, "rfq.eml"), os.path.join(d, "-x.eml"))
 bad = [
+    # An unrecognised flag drives the WRAPPER's OWN argparse to SystemExit(2).
+    # Round 31 reported this unprotected; its stated repro (remove the clamp)
+    # does not reproduce, because __main__'s broad catch handles it first.
+    # Removing BOTH layers does leak a 2, and no case here made the wrapper's
+    # argparse fail at all, so the property was genuinely untested.
+    ("unrecognised flag (run_engine)", [RUN, "--bogus-flag"]),
+    ("unrecognised flag (generate_report)", [GEN, "--bogus-flag"]),
+    ("unrecognised flag (render_reply)",
+     [os.path.join(ROOT, "src", "scripts", "render_reply.py"), "--bogus-flag"]),
     ("existing leading-dash input reaches the engine's argparse",
      [RUN, "--in=-x.eml", "--state", "_report/state.json"]),
     ("missing input", [RUN, "--in", "nope.eml", "--state", "_report/state.json"]),
@@ -281,7 +290,7 @@ shutil.rmtree(d)
 
 # =============================== ROUND 28 ====================================
 
-print("Round 28 / F-4 — ALL THREE clearing sites consume the declaration")
+print("Round 28 / F-4 — clearing sites consume the ARTIFACTS declaration")
 d = workdir(("rfq.eml", "confirmed-ids"))
 driver = os.path.join(d, "drive3.py")
 with open(driver, "w", encoding="utf-8") as fh:
@@ -320,6 +329,86 @@ check("the report phase follows a RENAMED declaration, not a literal path",
       "renamed:FOLLOWED" in out,
       f"out={out.strip()[-90:]} err={err.strip()[-90:]}")
 shutil.rmtree(d)
+
+
+print("Round 31 / F-3 — the exit clamp is driven by a path where a 2 could ESCAPE")
+# Round 31: deleting the clamp from BOTH wrappers left the suite 28/28 green,
+# because none of Defence 4's five cases drove argparse inside cli.main. An
+# EXISTING input whose name starts with '-' does: the engine's own argparse
+# rejects it with SystemExit(2).
+REPLY = os.path.join(ROOT, "src", "scripts", "render_reply.py")
+d = workdir(("rfq.eml", "confirmed-ids"))
+shutil.copy(os.path.join(d, "rfq.eml"), os.path.join(d, "-x.eml"))
+for label, args in [
+    ("run_engine", [RUN, "--in=-x.eml", "--state", "_report/state.json"]),
+    ("generate_report", [GEN, "--in=-x.eml", "--no-reconcile",
+                         "--out", "_report/bom_draft.md"]),
+]:
+    rc, _, _ = sh(args, d)
+    check(f"{label}: engine SystemExit(2) cannot escape as exit 2", rc in (0, 1),
+          f"exit={rc}")
+shutil.rmtree(d)
+
+print("Round 31 / F-4 — --config-dir survives the phase boundary (R25-F1's shape)")
+# Round 31: --component-ids and --coc each had a defence; the third flag had
+# none. Dropping it from build_argv left phase 1 exit 0, phase 2 reconciling
+# GREEN (both passes replay the same builder) and the CaseState built from the
+# wrong item master. Reconciliation structurally cannot see it, so the check has
+# to compare against a config whose effect is visible in the output.
+d = workdir(("rfq.eml", "plain-steam"))
+alt = os.path.join(d, "altconfig")
+shutil.copytree(os.path.join(ROOT, "src", "vendor", "config"), alt)
+with open(os.path.join(alt, "catalog.json"), encoding="utf-8") as fh:
+    cat = json.load(fh)
+items = cat if isinstance(cat, list) else cat.get("items", [])
+if items:
+    items[0]["description"] = "ALTCONFIG-MARKER"
+with open(os.path.join(alt, "catalog.json"), "w", encoding="utf-8") as fh:
+    json.dump(cat, fh)
+marker_id = items[0]["id"] if items else None
+rc, out, err = sh([RUN, "--in", "rfq.eml", "--state", "_report/state.json",
+                   "--config-dir", alt, "--component-ids", marker_id], d)
+check("--config-dir reaches the engine (exit 0)", rc == 0, f"exit={rc} {err.strip()[:90]}")
+with open(os.path.join(d, "_report", "case_state.json"), encoding="utf-8") as fh:
+    cs = json.load(fh)
+check("the alternate catalog's data is in the CaseState",
+      "ALTCONFIG-MARKER" in json.dumps(cs),
+      "the flag was dropped: the CaseState came from the SHIPPED catalog")
+rc2, _, err2 = phase2(d)
+check("the reply phase agrees with a --config-dir run", rc2 == 0, err2.strip()[:90])
+shutil.rmtree(d)
+
+print("Round 31 — the reply is the deliverable, and it carries what the draft drops")
+d = workdir(("rfq.eml", "plain-steam"))
+phase1(d, "rfq.eml")
+phase2(d)
+rc, out, err = sh([REPLY, "--state", "_report/state.json"], d)
+check("render_reply exits 0", rc == 0, err.strip()[:90])
+check("reply.md is produced", "reply.md" in artifacts(d), f"artifacts={artifacts(d)}")
+with open(os.path.join(d, "_report", "reply.md"), encoding="utf-8") as fh:
+    reply = fh.read()
+with open(os.path.join(d, "_report", "case_state.json"), encoding="utf-8") as fh:
+    cs = json.load(fh)
+check("every open item appears in the reply",
+      all(i["code"] in reply for i in cs["open_items"]),
+      "an open item was dropped from the reply")
+check("every field appears in the reply",
+      all(name in reply for name in cs.get("fields", {})),
+      "a field was dropped from the reply")
+check("the routing recommendation appears",
+      str((cs.get("routing") or {}).get("recommendation", "")) in reply)
+check("an unconfirmed field is marked as such",
+      ("NOT CONFIRMED" in reply) == any(
+          (f or {}).get("status") in {"reading", "assumed", "missing", "conflict"}
+          for f in cs.get("fields", {}).values()))
+check("the reply never claims to be a quote",
+      "DRAFT" in reply and "not a quote" in reply)
+check("the manifest attaches NOTHING",
+      sum(1 for a in json.load(open(os.path.join(ROOT, "kit.json")))
+          ["outputs"]["artifacts"] for t in a.get("tags", [])
+          if t == "email_attachment") == 0)
+shutil.rmtree(d)
+
 
 failed = [r for r in results if not r[1]]
 print(f"\n{len(results) - len(failed)}/{len(results)} defences held")

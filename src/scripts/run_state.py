@@ -32,6 +32,9 @@ import os
 ARTIFACTS = {
     "case_state": os.path.join("_report", "case_state.json"),
     "bom_draft": os.path.join("_report", "bom_draft.md"),
+    # The inline reply body. The kit attaches nothing: everything an operator
+    # needs is in the message, so this is the deliverable a human reads.
+    "reply": os.path.join("_report", "reply.md"),
 }
 
 # The engine invocation's shape. Adding an argument means adding it here.

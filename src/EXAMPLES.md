@@ -90,11 +90,23 @@ recommendation; `_report/bom_draft.md`.
 
 **Prompt:** "What does this email need?"
 
-**Arguments:** `newsletter.eml` (e.g. a bulk mailing, an auto-reply, a delivery-status
-bounce, an invoice/statement, a bare "thanks, got it.", or internal chatter)
+**Arguments:** `newsletter.eml` (a bulk mailing, an auto-reply, a bounce, an
+invoice, a bare "thanks, got it.", internal chatter)
 
-**Expected workflow:**
-1. `prepare` — resolves `newsletter.eml`, writes `_report/state.json`.
+**Expected workflow:** the kit does not pre-judge whether a message deserves a
+quote — it reads the whole thing and lets the engine classify it. All three phases
+run normally. The engine returns `request_class: out_of_scope` with a single
+`ROUTED_ACKNOWLEDGE` open item, and the reply says plainly that there is nothing
+to quote and where the message should go instead.
+
+**Produces:** `_report/case_state.json`, `_report/reply.md`, `_report/bom_draft.md`
+— the same three artifacts as any other run, with an empty BOM table.
+
+A previous version screened such messages out before the engine ran. That was
+removed: measured against a 45-message corpus it discarded 13 genuine RFQs, and
+54% of everything it dropped was real customer business. Reading the message and
+saying "nothing to quote" costs a few hundred milliseconds and cannot lose an
+order.
 
 ## Argument Reference
 

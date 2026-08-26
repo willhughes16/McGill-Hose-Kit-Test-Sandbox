@@ -18,8 +18,10 @@ Given one `.eml` or `.txt` RFQ, it produces:
   `route`; the request classified (`hose_assembly`, `bulk_hose`, `component_rfq`,
   `order`, `stocking_lead`, `out_of_scope`); a routing recommendation; and
   knowledge provenance.
-- **`_report/bom_draft.md`** — the readable draft: BOM table, harness-held
-  checkpoints, operator questions, open items.
+- **`_report/reply.md`** — the reply body, sent inline with **no attachment**:
+  everything above in words, including the fields, routing, thread corrections and
+  provenance that `bom_draft.md` drops.
+- **`_report/bom_draft.md`** — the engine's own verbatim rendering, kept for parity.
 
 Two consumers, one contract: a person can read the draft, and a conversational
 layer can consume the same CaseState to run the customer dialogue without guessing
@@ -76,7 +78,8 @@ quietly wrong.**
 |---|---|
 | `recipes/mcgill-email-to-bom.yaml` | The execution contract: `prepare` → `extract_case` → `generate_report`. |
 | `scripts/run_engine.py` | Thin wrapper: runs the vendored engine, writes the CaseState verbatim. |
-| `generate_report.py` | Thin wrapper: writes the human-readable draft verbatim. |
+| `generate_report.py` | Thin wrapper: writes the engine's verbatim rendering. |
+| `scripts/render_reply.py` | Renders the whole case as the inline reply body — no attachment. |
 | `schemas/case_state.schema.json` | The CaseState contract, including the full open-item code vocabulary. |
 | `vendor/` | The engine, **vendored verbatim** — see `vendor/PROVENANCE.md`. |
 

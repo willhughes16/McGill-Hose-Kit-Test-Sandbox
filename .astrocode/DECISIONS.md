@@ -1,3 +1,11 @@
+> **SUPERSEDED 2026-08-26 (round 31).** Every decision below concerns the
+> input-filter gate, which was REMOVED in v0.8.0 after six blind rounds
+> (25–30) found it dropping real customer requests — round 30 measured 13 of
+> 45 genuine RFQs lost, with 54% of all its drops being real business. The
+> entries are kept as the record of what was decided and why it did not
+> survive contact with measurement. **None of them describes shipped code.**
+> The kit now reads every message and lets the engine classify it.
+
 # Decisions — mcgill-email-to-bom
 
 > Append-only ADR-lite log. Each entry: what we decided, why, and what we rejected.

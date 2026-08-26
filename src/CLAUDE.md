@@ -13,8 +13,9 @@ recommendation. It exists so an inside-sales rep — or a conversational layer
 running the customer dialogue — never has to guess what the customer asked for and
 never re-asks something already answered. The deterministic engine doing the work
 is vendored verbatim under `vendor/`; the kit wraps it, it does not reimplement it.
-The final deliverable is `_report/case_state.json`, the integration contract, with
-`_report/bom_draft.md` as the readable companion.
+The reply carries **no attachment**: the whole case goes in the message body, so
+`_report/reply.md` is what you send. `_report/case_state.json` remains the
+machine-readable contract on disk for a conversation layer to consume.
 
 ## How to run
 
@@ -25,8 +26,8 @@ The final deliverable is `_report/case_state.json`, the integration contract, wi
    `_report/` — never scatter files elsewhere.
 3. Track progress in `_report/state.json` so an interrupted run can resume.
 4. Deliverables are produced by the kit's scripts (`scripts/run_engine.py`,
-   `generate_report.py`) — if a script fails, debug and fix it; do NOT create the
-   artifact by hand.
+   `generate_report.py`, `scripts/render_reply.py`) — if a script fails, debug and
+   fix it; do NOT create the artifact by hand.
 5. **Write the run's arguments down once.** The prepare phase records an
    `invocation` object in `_report/state.json`; phases 1 and 2 read it
    (`--from-state`) rather than having you re-type the flags. Re-typing them is how
@@ -38,10 +39,9 @@ The final deliverable is `_report/case_state.json`, the integration contract, wi
 `$ARGUMENTS` must contain the **path to one RFQ email** (`.eml` or `.txt`).
 Optional: `--component-ids A B ...` for Component IDs an operator has already
 confirmed, and `--coc` when the customer requires a Certificate of Conformance.
-`--config-dir` selects an alternate rules/catalog directory.
-engine regardless of its own decision — the documented escape hatch for a
-false positive; it is never an engine flag and never reaches `run_engine.py`'s
-argv.
+`--config-dir DIR` selects an alternate rules/catalog directory — e.g. one backed
+by the ERP item master, which is the supported route to grounded selection. It IS
+passed through to the engine.
 
 If no RFQ path is given, print usage and STOP. If the path does not exist, print
 the path you tried and STOP — never guess at another file and never invent email
@@ -72,6 +72,11 @@ line:
   the draft would not describe the same case as `case_state.json`, re-run the extract
   phase. Do NOT pass `--no-reconcile` to get past it and do NOT write the draft by
   hand — the refusal is the safety net doing its job.
+- **Never attach a file to the reply.** The kit declares no `email_attachment`:
+  the case goes in the body. Attaching `case_state.json` would send an operator to
+  read JSON for information the reply already states in words.
+- **Never summarise `reply.md` down.** It is already the summary, and every line in
+  it is something the engine refused to assume. Send it, or frame it lightly.
 - **Never treat a missing artifact as equivalent to a stale one.** The scripts delete
   a previous run's artifacts before doing anything that can fail, on purpose: no
   artifact is an honest error, a leftover one is a silent wrong answer.
@@ -80,8 +85,9 @@ line:
 
 | Path | Role |
 |---|---|
-| `_report/case_state.json` | **The email attachment.** The machine contract: fields with statuses and evidence, open items with codes/priorities/routes, request class, routing, knowledge provenance. Conforms to `schemas/case_state.schema.json`. |
-| `_report/bom_draft.md` | Readable draft: BOM table, harness-held checkpoints, operator questions, open items. A **lossy** view of the CaseState — cite the JSON as authoritative. |
+| `_report/reply.md` | **What you send, as the message body.** The whole case inline: request class and urgency, open items grouped by priority with their routes, every field with its status and evidence, the draft BOM, harness-held checkpoints, corrections found in the thread, and knowledge provenance. |
+| `_report/case_state.json` | The machine contract a conversation layer consumes. Conforms to `schemas/case_state.schema.json`. **Not attached** — cite it, do not send it. |
+| `_report/bom_draft.md` | The engine's own verbatim rendering, byte-identical to what the source engine prints. A **lossy** view kept for parity, not for sending. |
 | `_report/state.json` | The run's `invocation` record (written by prepare, read by the later phases) plus the extract result. Not a deliverable. |
 
 ## Reference material

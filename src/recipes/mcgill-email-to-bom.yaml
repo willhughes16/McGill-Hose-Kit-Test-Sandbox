@@ -110,8 +110,18 @@ phases:
     goal: >
       Produce the kit's human-readable deliverable.
 
-      Use: python3 generate_report.py --out _report/bom_draft.md
-           --state _report/state.json
+      Use, in this order:
+        python3 generate_report.py --out _report/bom_draft.md
+             --state _report/state.json
+        python3 scripts/render_reply.py --out _report/reply.md
+             --state _report/state.json
+
+      `_report/reply.md` is the deliverable a human reads and **the kit attaches
+      nothing** — the whole case goes in the message body. Send its contents as
+      the reply, verbatim or lightly framed; do NOT summarise it down, and do NOT
+      attach `case_state.json`. The reply already carries everything
+      `bom_draft.md` drops: every field with its status and evidence, the routing
+      recommendation, corrections found in the thread, and knowledge provenance.
 
       It replays the invocation recorded in phase 1 (every flag, not just the
       input path) and, before writing, re-derives the CaseState and checks it
@@ -131,8 +141,9 @@ phases:
       a confirmed BOM, or an order.
 
       Remember `bom_draft.md` is a LOSSY view: it omits `fields`, `routing`,
-      `knowledge` and `supersedes`. Cite `_report/case_state.json` as the
-      authoritative record, and attach that file.
+      `knowledge` and `supersedes`. `_report/reply.md` includes them, which is why
+      it is what you send. `_report/case_state.json` remains the authoritative
+      machine record on disk — cite it, but do NOT attach it.
     constraints:
       - "ALWAYS use the script — NEVER generate the deliverable by hand"
       - "If the script fails, debug and fix it — do NOT create the artifact manually"
@@ -140,8 +151,11 @@ phases:
       - "NEVER present the draft as a quote, a confirmed BOM, or a committed order"
       - "NEVER state a price, a lead time or a stock position the engine did not produce"
       - "Report every open item — do NOT summarise them away or judge them minor"
+      - "Send _report/reply.md as the message body — the kit attaches NOTHING"
+      - "NEVER attach case_state.json or any other file to the reply"
     input:
       - _report/state.json
       - _report/case_state.json
     output:
       - _report/bom_draft.md
+      - _report/reply.md

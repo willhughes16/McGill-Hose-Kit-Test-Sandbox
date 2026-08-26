@@ -348,11 +348,36 @@ as of v0.8.0. The measurements that decided it, from an independent 45-message c
   replacement in a fix pass now asserts its anchor matched, and every new check is
   mutation-tested before it is claimed.
 
-**What remains:** the engine, vendored verbatim, behind a two-phase recipe (`prepare` →
+**What remains:** the engine, vendored verbatim, behind a three-phase recipe (`prepare` →
 `extract_case` → `generate_report`) with the rounds 25–28 wrapper defences — one
 invocation contract, draft/CaseState reconciliation that fails closed, loud stale-artifact
 clearing, clamped exit codes. Those are the parts every blind round has confirmed. The
 28-check self-test covers exactly them.
+
+### Round 31 (blind verification) — FAIL, and what it changed
+
+Round 31 verified the removal and found the surgery left prose damage, exactly where a
+removal round was predicted to leave it. **Mutation survival: 18 of 36.**
+
+- REQ-060 Shipped documentation is shipped bytes. F-1: a regex left a sentence fragment in
+  `src/CLAUDE.md`'s Arguments section whose only visible subject became `--config-dir`,
+  asserting it "never reaches `run_engine.py`'s argv" — false, `build_argv` passes it. F-2:
+  `EXAMPLES.md` Example 5 was truncated mid-list with no `**Produces:**`, violating the kit
+  contract's required format. Both were inside `dist/kit.zip`. No gate in `tools/` can see
+  documentation damage, which is why they shipped.
+- REQ-061 `--config-dir` has a defence. F-4: `--component-ids` and `--coc` each had one and
+  the third flag had none — dropping it from `build_argv` left phase 1 at exit 0, phase 2
+  reconciling GREEN (both passes replay the same builder, so reconciliation structurally
+  cannot see it) and the CaseState built from the wrong item master. The check now plants a
+  marker in an alternate catalog and requires it in the output.
+- REQ-062 The exit clamp is driven by a path where a 2 can escape. F-3 was **right in
+  substance and wrong in its reproduction**: removing the clamp alone does NOT leak a 2
+  (the `__main__` broad catch handles it first), but removing both layers does, and no
+  check drove the wrappers' own argparse to fail. Three `--bogus-flag` cases now do.
+- REQ-063 A superseded design record says so. F-5: all five ADRs in `DECISIONS.md`
+  described the deleted gate in the present tense with no superseding entry, and the
+  removal commit never touched the file — the "missed the sibling" shape for the eleventh
+  time.
 
 ## Constraints
 
@@ -418,9 +443,8 @@ quietly treated as complete.
   engine (the source documents this). Harmless dead weight kept for verbatim
   fidelity.
 - **FOLLOW-UP-10 — the kit's own validator cannot check its schemas** (round-25/26
-  shape, surfaced by the phase-5 verifier). `tools/_schema_engine.py` raises on the
-  `"type": ["string","null"]` unions in `src/schemas/filter_decision.schema.json`, and
-  already could not validate `case_state.schema.json` ("additionalProperties subschema
+  shape, surfaced by the phase-5 verifier). `tools/_schema_engine.py` cannot validate
+  `case_state.schema.json` ("additionalProperties subschema
   at path fields"). So both output contracts are documented but not machine-checkable
   by the kit's own tooling — the enums are enforced only by `tools/selftest.py`
   asserting real records against them. Pre-existing, not introduced by phase 5, and
@@ -436,7 +460,7 @@ quietly treated as complete.
   8 KB, ~5 s at 134 KB, ~80 s at 538 KB, unbounded beyond. Measured as **inherited**:
   the source engine takes 88.0 s on the same 538 KB input and its output is
   byte-identical, so parity holds and the cost is the engine's, not the kit's. The kit
-  now warns above 100 KB from both scripts and states an honest `estimated_duration`;
+  now warns above 100 KB from the wrapper scripts and states an honest `estimated_duration`;
   a real fix (or a documented input ceiling) belongs upstream. Note a kit run costs
   THREE engine passes, so the end-to-end cost is ~3x the single-pass figures
   (round 26, R26-F7).
