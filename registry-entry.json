@@ -45,7 +45,7 @@
   },
   "estimated_duration": "{{DURATION}}",
   "download_url": "https://TODO.example/{{KIT_ID}}/dist/kit.zip",
-  "sha256": "e7fcbe434f2189a0e8cae3fa2a98dd31dc3d8c3002d747005edd5b848847f62d",
+  "sha256": "8471b31573329d6317de0983f8ca99fb82439ec952c2ab7423a3dca04160d7f2",
   "contract_version": "^1.0.0",
   "manifest_version": 4
 }

@@ -13,6 +13,12 @@ rules that must not drift.
 | Vendored on | 2026-08-26T14:01:52Z |
 | Copy command | `rsync -a --exclude __pycache__ email_to_bom/ config/` |
 
+> **Still current as of source `b15b23d`.** That commit fixed a hardcoded path in
+> `tests/property/shape_matrix.py` and touched nothing this directory vendors, so the
+> copy below is byte-identical to the source's `email_to_bom/` and `config/` at
+> `b15b23d`. The stamp stays at `b1f9950` because that is the commit the copy was
+> actually taken from and the parity fixtures were captured against.
+
 The repo is private, so the engine cannot be pinned as a `requires.tools[]`
 `url` entry (https + sha256 fetch would need auth) and it is not on PyPI. Vendoring
 is therefore what keeps the kit self-contained per the kit contract.
