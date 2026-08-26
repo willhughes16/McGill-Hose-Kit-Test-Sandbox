@@ -117,10 +117,14 @@ quietly treated as complete.
   master the engine cannot choose a hose or fitting and raises
   `SELECTION_UNRESOLVED`. Unlocking it (and the `verified` knowledge tier) needs the
   P21 item master and the ContiTech catalog from McGill.
-- **FOLLOW-UP-4 — no `ac registry init` yet.** `ac status` reports no origin remote.
-  The kit directory currently sits inside the `~/Desktop` git repo rather than owning
-  its own; it needs its own repo and remote before the registry entry or
-  `dist/kit.zip` commit means anything.
+- ~~**FOLLOW-UP-4 — no `ac registry init` yet.**~~ **CLOSED 2026-08-26.** The kit now
+  owns its own git repo (it no longer sits inside the `~/Desktop` repo), `dist/kit.zip`
+  is committed with `git add -f`, origin is
+  `github.com/ScaleUpLabs/McGill-email-to-bom-kit` (private), and `ac registry init`
+  succeeded on `astro-registry`. This satisfies REQ-015 and the work of phase 1 —
+  which was completed before the phase was created, so phase 1 has no plan or
+  verification record in the astro loop. Accept or drop it deliberately rather than
+  running it as if the work were outstanding.
 - **FOLLOW-UP-5 — `download_url` is a placeholder.** `kit.json` still carries
   `https://TODO.example/...`; it is filled in by publishing, not by hand.
 - **FOLLOW-UP-6 — fixture corpus is thin and partly synthetic.** Six fixtures, five

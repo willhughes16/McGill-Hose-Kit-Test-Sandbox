@@ -1,5 +1,30 @@
 {
   "version": 1,
   "milestone": 1,
-  "phases": []
+  "phases": [
+    {
+      "number": 1,
+      "name": "Own repo and registry entry",
+      "slug": "01-own-repo-and-registry-entry",
+      "status": "pending"
+    },
+    {
+      "number": 2,
+      "name": "Broaden the parity corpus",
+      "slug": "02-broaden-the-parity-corpus",
+      "status": "pending"
+    },
+    {
+      "number": 3,
+      "name": "Vendor-refresh guard",
+      "slug": "03-vendor-refresh-guard",
+      "status": "pending"
+    },
+    {
+      "number": 4,
+      "name": "Publish to hosted Astro",
+      "slug": "04-publish-to-hosted-astro",
+      "status": "pending"
+    }
+  ]
 }
