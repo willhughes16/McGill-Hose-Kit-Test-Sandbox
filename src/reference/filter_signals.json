@@ -5,38 +5,17 @@
     {
       "code": "DELIVERY_STATUS_NOTIFICATION",
       "route": "no_action",
-      "detector": "dsn_headers",
-      "filter_tier": "requires_no_specs"
+      "detector": "dsn_headers"
     },
     {
       "code": "AUTO_REPLY",
       "route": "no_action",
-      "detector": "auto_reply_header",
-      "filter_tier": "requires_no_specs"
+      "detector": "auto_reply_header"
     },
     {
       "code": "BULK_MAILING",
-      "route": "no_action",
-      "detector": "bulk_headers",
-      "filter_tier": "always"
-    },
-    {
-      "code": "INVOICE_OR_STATEMENT",
-      "route": "accounts_payable",
-      "detector": "invoice_content",
-      "filter_tier": "requires_no_specs"
-    },
-    {
-      "code": "BARE_ACKNOWLEDGEMENT",
       "route": "inside_sales_fyi",
-      "detector": "ack_content",
-      "filter_tier": "requires_no_specs"
-    },
-    {
-      "code": "INTERNAL_CHATTER",
-      "route": "internal_ops",
-      "detector": "internal_domain_content",
-      "filter_tier": "requires_no_specs"
+      "detector": "bulk_headers"
     }
   ],
   "_quote_request_cues_note": "request_act half of the quoting-request veto: is this a request AT ALL, independent of product words (the engine assumes yes, so this is genuinely new vocabulary, not a second copy of a rule). Phrases only \u2014 no product/media/fitting nouns.",
@@ -59,65 +38,9 @@
     "quote on"
   ],
   "_invoice_phrases_note": "Positive invoice/statement evidence in subject or body (content tier \u2014 no protocol header marks this category).",
-  "invoice_phrases": [
-    "invoice",
-    "statement of account",
-    "amount due",
-    "remit to",
-    "remittance",
-    "net 30",
-    "net 60",
-    "past due",
-    "account balance",
-    "payment due",
-    "please remit",
-    "terms net"
-  ],
   "_ack_phrases_note": "Used under a dominance test in filter_gate.py: after stripping quoted history and signature, the remainder must be UNDER ack_max_chars AND match one of these \u2014 never bare substring presence against the raw body.",
-  "ack_phrases": [
-    "thanks, got it",
-    "got it, thanks",
-    "thank you, got it",
-    "received, thank you",
-    "received with thanks",
-    "thanks, received",
-    "noted, thanks",
-    "noted with thanks",
-    "ok, thanks",
-    "okay, thanks",
-    "acknowledged, thanks",
-    "thanks",
-    "got it",
-    "received",
-    "acknowledged",
-    "sounds good, thanks",
-    "perfect, thanks"
-  ],
   "_auto_reply_localparts_note": "Sender local-parts consistent with an out-of-office / vacation responder, corroborating the RFC 3834 Auto-Submitted header check.",
-  "auto_reply_localparts": [
-    "autoreply",
-    "auto-reply",
-    "auto_reply",
-    "no-reply",
-    "noreply",
-    "no_reply",
-    "donotreply",
-    "do-not-reply",
-    "vacation",
-    "out-of-office",
-    "outofoffice"
-  ],
   "_dsn_sender_localparts_note": "Bounce/DSN sender local-parts, corroborating the multipart/report + message/delivery-status structural check.",
-  "dsn_sender_localparts": [
-    "mailer-daemon",
-    "mailerdaemon",
-    "mail-daemon",
-    "maildaemon",
-    "postmaster",
-    "bounce",
-    "bounces",
-    "bounce-daemon"
-  ],
   "_bulk_precedence_values_note": "Precedence header values that corroborate List-Unsubscribe for the bulk-mailing tier. List-Unsubscribe alone is never sufficient (a real customer can run a mailer too) \u2014 it must be paired with one of these or with List-Id.",
   "bulk_precedence_values": [
     "bulk",
@@ -125,7 +48,6 @@
     "junk"
   ],
   "_thresholds_note": "ack_max_chars bounds the dominance test for BARE_ACKNOWLEDGEMENT (short polite remainder only). html_scan_bytes bounds the HTML-only fallback body the gate will run mail.html_to_text on before failing open \u2014 chosen to stay well under the engine's superlinear cost at the ~1 MB scale the gate must handle in under a couple of seconds (FOLLOW-UP-9).",
-  "ack_max_chars": 120,
   "html_scan_bytes": 65536,
-  "_filter_tier_note": "ROUND 27 (R27-F1/F2). 'always' may filter a message even when it carries product specifications: only true list-mail headers (List-Unsubscribe + Precedence/List-Id) qualify, because no buyer subscribes a supplier to their own RFQ. Everything else is 'requires_no_specs' and may filter ONLY when the vendored engine extracts ZERO specification fields from the message. Round 27 filtered 24 of 35 genuine RFQs because the protection was an enumeration (a 16-phrase 'quote_request_cues' list) sitting on the UNSAFE side of the decision: one line of 'Terms net 30.' dropped a 200-foot EPDM order. Spec depth is a measured property of the message, not a list, and it is monotone -- the more a customer specifies, the more protected they are."
+  "_round_29_note": "ROUND 29 removed three categories and two signals outright. Round 29 dropped 11 of 46 genuine RFQs: 6 to accounts_payable via an invoice_phrases SUBSTRING ('net 30' in a purchasing email is evidence of a purchase order, not an invoice), and 5 to no_action via auto_reply_localparts ('no-reply@', 'donotreply@' -- the standard sender of every sourcing portal and ERP requisition notice, i.e. the most common way a B2B RFQ arrives). INVOICE_OR_STATEMENT, BARE_ACKNOWLEDGEMENT and INTERNAL_CHATTER judged a message by its prose or its addressing; no phrase list makes that safe, so they are gone. What remains is only what a sender's software DECLARES about the message under RFC 3834/3464: an automatic reply, a delivery report, or list mail. Invoices, bare acknowledgements and internal notes now reach the engine and produce a draft to dismiss -- noise, not loss."
 }

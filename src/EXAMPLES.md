@@ -99,8 +99,7 @@ bounce, an invoice/statement, a bare "thanks, got it.", or internal chatter)
    without invoking it, and exits `3`: nothing to quote. **The run STOPS
    here.** Read the `filter` record `screen_input` wrote into
    `_report/state.json` and report its `code` (one of
-   `DELIVERY_STATUS_NOTIFICATION`, `AUTO_REPLY`, `BULK_MAILING`,
-   `INVOICE_OR_STATEMENT`, `BARE_ACKNOWLEDGEMENT`, `INTERNAL_CHATTER`), its
+   `DELIVERY_STATUS_NOTIFICATION`, `AUTO_REPLY`, `BULK_MAILING`), its
    `route` and the `input` path, in plain language. Mention `--no-filter` as
    the override if the requester believes this is a false positive.
 3. `extract_case` and `generate_report` never run.
@@ -176,27 +175,37 @@ filtered run is never left sitting beside a stale draft).
   the more protected they are. An earlier version protected RFQs with a 16-phrase
   "quote request" list instead, and one line of `Terms net 30.` was enough to
   drop a 200-foot EPDM order — the list was on the wrong side of the decision.
-- **Only true list-mail may be filtered despite carrying specifications.** A
-  `List-Unsubscribe` header together with `Precedence: bulk` or a `List-Id` is
-  mail nobody sends to place an order — a buyer does not subscribe a supplier to
-  their own RFQ. That is why a hose-industry newsletter full of product names is
-  still filtered while an RFQ that merely mentions an invoice is not.
+- **No category is exempt from the specification guard.** An earlier version let
+  list-mail skip it; a customer whose ESP stamps `List-Unsubscribe` was then
+  dropped with eight spec kinds extracted. Nothing skips it now.
 - **The filter fails toward running the engine.** Everything the gate cannot
   resolve confidently — no text obtained, a parse defect, an HTML-only body over
   its scan budget, an unrecognised or undecodable part, an undeclared code/route,
   unreadable reference data, or a failure inside the gate itself — resolves to
   *not filtered*. Only a hard input error (the path itself missing or unreadable)
   is loud and stops the run.
-- **Known limit.** A genuine request carrying *no* extractable specification —
+- **Three categories, all header-declared.** `AUTO_REPLY` (`Auto-Submitted:
+  auto-replied`, or `X-Autoreply`), `DELIVERY_STATUS_NOTIFICATION` (an RFC 3464
+  report), `BULK_MAILING` (`List-Unsubscribe` plus `Precedence: bulk`/`List-Id`).
+  Invoice, bare-acknowledgement and internal-chatter filtering was **removed**:
+  judging a message by its prose or its addressing dropped 11 of 46 genuine RFQs,
+  including 6 sent to accounts payable because they contained "net 30". Those
+  messages now produce a draft to dismiss — noise, not loss.
+- **The body is what is measured, not the subject.** An out-of-office reply
+  echoes the RFQ subject verbatim, so subject-inclusive measurement let most of
+  them through the very category built to catch them.
+- **Known limit.** A genuine request carrying *no* extractable specification in
+  its body —
   "please quote the attached drawing", with the detail only in an attachment —
   and also carrying a junk signal can still be filtered. Where it goes depends on
   the category: the content categories route to a human queue
   (`inside_sales_fyi` / `accounts_payable` / `internal_ops`), but the
-  machine-header categories — auto-reply, bounce, bulk — route to `no_action`, so
-  a spec-less request arriving with an `Auto-Submitted` header **can** be filed
-  where nobody looks. `--no-filter` processes it. This is the gate's sharpest
-  remaining edge; real RFQ corpora would tell us how often the shape occurs, and
-  it has not been measured.
+  two protocol reports (auto-reply, bounce) route to `no_action`; list mail routes
+  to `inside_sales_fyi` so a human sees it. The sender-address heuristic that made
+  this edge common — treating `no-reply@`/`donotreply@` as an auto-reply, which is
+  how every sourcing portal sends — has been removed. `--no-filter` processes any
+  filtered message. Real RFQ corpora would still sharpen this; it has not been
+  measured against live mail.
 - **Direct, without Astro, the documented sequence runs the gate first.**
   ```
   python3 scripts/filter_gate.py --in rfq.eml --state _report/state.json

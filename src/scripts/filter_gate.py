@@ -120,7 +120,11 @@ def _load_reason_pattern(path=SCHEMA_PATH):
     try:
         with open(path, encoding="utf-8") as fh:
             return json.load(fh)["properties"]["reason"].get("pattern")
-    except (OSError, json.JSONDecodeError, KeyError, AttributeError):
+    except (OSError, json.JSONDecodeError, KeyError, AttributeError, TypeError):
+        # TypeError included deliberately: round 29 (F-6) found this sibling of
+        # _load_enums missing it, so a malformed schema crashed the gate with an
+        # unhandled TypeError and rc=1 instead of failing open. A guard's own
+        # failure must never stop the run.
         return None
 
 
@@ -296,19 +300,36 @@ def _dsn_headers(headers, signals):
     """
     ctype = str(headers.get("Content-Type", "") or "").lower()
     is_report = "multipart/report" in ctype and "delivery-status" in ctype
-    null_return = str(headers.get("Return-Path", "") or "").strip() in ("<>", "")
-    if is_report and null_return:
+    # The report-type declaration alone. An earlier round also demanded a null
+    # `Return-Path`, which lost real bounces that do not set one; and the reason
+    # that requirement existed -- protecting a genuine RFQ forwarded inside a
+    # multipart/report -- is now handled by the body-depth guard, which no
+    # category can skip. Detect the declaration; let the guard decide.
+    if is_report:
         return str(headers.get("Content-Type", "")).strip()
     return None
 
 
 def _auto_reply_header(headers, signals):
-    val = headers.get("Auto-Submitted")
-    if val is not None and str(val).strip().lower() != "no":
-        return f"Auto-Submitted: {val}".strip()
-    sender = _local_part(headers.get("From"))
-    if sender and sender in signals.get("auto_reply_localparts", []):
-        return str(headers.get("From", "")).strip()
+    """An automatic REPLY, per RFC 3834 -- never an original request.
+
+    Round 29 (F-2) found two defects here. The sender local-part test
+    (`no-reply@`, `donotreply@`) dropped real RFQs, because that is the standard
+    sender of every sourcing portal and ERP requisition notice -- the most common
+    way a B2B request arrives. It is gone: an address is not a declaration.
+
+    And `auto-generated` was treated the same as `auto-replied`. RFC 3834 draws a
+    real line: `auto-replied` means this message IS a reply to another, which a
+    customer's original request never is; `auto-generated` merely means software
+    produced it, which is exactly what an ERP requisition is. Only `auto-replied`
+    (and the legacy `X-Autoreply`/`X-Autorespond` markers) filter now.
+    """
+    val = str(headers.get("Auto-Submitted", "") or "").strip().lower()
+    if val.startswith("auto-replied"):
+        return f"Auto-Submitted: {val}"
+    for legacy in ("X-Autoreply", "X-Autorespond"):
+        if headers.get(legacy):
+            return f"{legacy}: {headers.get(legacy)}".strip()
     return None
 
 
@@ -334,48 +355,14 @@ _HEADER_DETECTORS = {
 
 # ------------------------------ content-tier detectors -------------------------
 
-def _invoice_content(subject, body, headers, signals):
-    combined = f"{subject}\n{body}".lower()
-    for phrase in signals.get("invoice_phrases", []):
-        if phrase in combined:
-            return phrase
-    return None
-
-
-def _ack_content(subject, body, headers, signals):
-    remainder = _strip_quote_and_signature(body)
-    max_chars = signals.get("ack_max_chars", 0)
-    if not remainder or len(remainder) > max_chars:
-        return None
-    normalized = remainder.strip().lower().rstrip(".,!;: ")
-    if normalized in signals.get("ack_phrases", []):
-        return remainder
-    return None
-
-
-def _internal_domain_content(subject, body, headers, signals):
-    if headers is None:
-        return None
-    from_addrs = getaddresses([str(headers.get("From", "") or "")])
-    if not from_addrs or "@" not in from_addrs[0][1]:
-        return None
-    from_domain = from_addrs[0][1].rsplit("@", 1)[-1].strip().lower()
-    to_cc = getaddresses([str(headers.get("To", "") or ""),
-                           str(headers.get("Cc", "") or "")])
-    recipients = [addr for _, addr in to_cc if addr and "@" in addr]
-    if not recipients:
-        return None
-    if all(addr.rsplit("@", 1)[-1].strip().lower() == from_domain
-           for addr in recipients):
-        return f"internal: {from_domain}"
-    return None
-
-
-_CONTENT_DETECTORS = {
-    "invoice_content": _invoice_content,
-    "ack_content": _ack_content,
-    "internal_domain_content": _internal_domain_content,
-}
+# EMPTY, on purpose. Round 29 dropped 11 of 46 genuine RFQs and every content
+# detector was implicated: an `invoice_phrases` substring sent 6 to accounts
+# payable ("net 30" in a purchasing email is a purchase order, not an invoice),
+# and the ack/internal detectors judged a message by its length or its
+# addressing. A message's prose is not evidence that its sender wants nothing.
+# The detectors are deleted rather than disabled so a new category cannot re-wire
+# a capability that has failed twice.
+_CONTENT_DETECTORS = {}
 
 
 # ---------------------------------- decide() ----------------------------------
@@ -473,16 +460,30 @@ def _decide(raw, filename, rules, signals, agent=None):
     # specifications now reaches the engine and produces a draft an operator
     # dismisses. PROJECT.md's phase-5 constraint settles that trade outright --
     # "filtering out a real RFQ is far worse than passing a newsletter through".
-    depth = _spec_depth(agent, low)
+    # Measured on the BODY ALONE, deliberately. The subject is not the customer's
+    # words: an out-of-office responder echoes the RFQ subject back verbatim, so
+    # round 29 (F-8) found 4 of 6 realistic OOO replies measuring a non-zero
+    # depth and escaping. The body is what the sender actually wrote -- an OOO
+    # body says "I am away", a real request states what it wants.
+    #
+    # This replaced a protocol exemption for `auto-replied`/DSN, which would have
+    # let those two categories skip the guard. That exemption dropped the shipped
+    # `bait-rfq` fixture: a genuine RFQ body wearing an `Auto-Submitted:
+    # auto-replied` header. No category is exempt; the measurement got sharper
+    # instead.
+    depth = _spec_depth(agent, body.lower())
     if depth > 0:
         return {"filtered": False, "code": None, "route": None,
                 "evidence": None, "reason": f"specifications_present:{depth}"}
 
     # SECOND NET -- the quoting-request veto. Never load-bearing: the depth guard
     # above applies to every category, so this only ever adds protection.
-    klass, _ev = triage.classify(low, rules)
+    # Body only, for the same reason as the depth guard: the subject can be a
+    # machine's echo of the customer's words, not the customer's words.
+    body_low = body.lower()
+    klass, _ev = triage.classify(body_low, rules)
     product_signal = klass != "out_of_scope"
-    request_act = _is_request_act(low, klass, rules, signals)
+    request_act = _is_request_act(body_low, klass, rules, signals)
     if product_signal and request_act:
         return {"filtered": False, "code": None, "route": None,
                 "evidence": None, "reason": "quoting_request_detected"}

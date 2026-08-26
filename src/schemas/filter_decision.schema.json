@@ -23,12 +23,9 @@
         "null"
       ],
       "enum": [
-        "DELIVERY_STATUS_NOTIFICATION",
         "AUTO_REPLY",
         "BULK_MAILING",
-        "INVOICE_OR_STATEMENT",
-        "BARE_ACKNOWLEDGEMENT",
-        "INTERNAL_CHATTER",
+        "DELIVERY_STATUS_NOTIFICATION",
         null
       ],
       "description": "The matched filter category, or null when the message was not filtered. Deliberately SCREAMING_SNAKE like open_items[].code, but a disjoint set of values."
@@ -39,10 +36,8 @@
         "null"
       ],
       "enum": [
-        "no_action",
-        "accounts_payable",
         "inside_sales_fyi",
-        "internal_ops",
+        "no_action",
         null
       ],
       "description": "Where a filtered message should go, or null when the message was not filtered. Deliberately disjoint from open_items[].route and routing.recommendation, so a consumer can never mistake a filtered message for a routed-but-undrafted case."

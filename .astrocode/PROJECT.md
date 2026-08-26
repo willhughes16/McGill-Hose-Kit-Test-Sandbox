@@ -262,6 +262,53 @@ round's fix pass.
   fixtures were HTML-only over budget, so no detector could fire and they passed on
   `candidate is None`) were rewritten to carry a live header candidate.
 
+### Round 29 (blind verification) — closed findings, now requirements
+
+Round 29 returned **FAIL** with three CRITICALs and recommended rollback. v0.6.0 was
+**live** and dropped **11 of 46 genuine RFQs (24%)** on an independent corpus. It has been
+deleted from the instance, which is back on filter-free v0.3.0. Fifth consecutive round
+whose findings were introduced by the previous round's fix.
+
+- REQ-050 A message's PROSE and its sender ADDRESS are never grounds to drop it.
+  `INVOICE_OR_STATEMENT`, `BARE_ACKNOWLEDGEMENT` and `INTERNAL_CHATTER` are deleted, and
+  so are `auto_reply_localparts` / `dsn_sender_localparts`. R29-F1/F2: an
+  `invoice_phrases` substring sent 6 real RFQs to accounts payable ("net 30" in a
+  purchasing email is a purchase order, not an invoice), and `no-reply@`/`donotreply@` —
+  the standard sender of every sourcing portal and ERP requisition — sent 5 to
+  `no_action`. Only what a sender's software DECLARES under RFC 3834/3464 can filter:
+  an automatic reply, a delivery report, or list mail. The detectors are deleted, not
+  disabled, so no future category can re-wire them.
+- REQ-051 `auto-generated` is not `auto-replied`. RFC 3834 draws the line: `auto-replied`
+  means the message IS a reply to another, which a customer's original request never is;
+  `auto-generated` is what ERPs stamp on real requisitions. Only the former filters.
+- REQ-052 Specification depth is measured on the BODY, not on subject+body. R29-F8: an
+  out-of-office responder echoes the RFQ subject verbatim, so 4 of 6 realistic OOO
+  replies measured a non-zero depth and escaped the category built to catch them. The
+  body is what the sender actually wrote. The same change is what let the depth
+  exemption for protocol-certain categories be removed — an exemption that dropped the
+  shipped `bait-rfq` fixture, a genuine RFQ body wearing an `auto-replied` header.
+- REQ-053 Nothing routes colder than a human queue except the two protocol reports.
+  `BULK_MAILING` now routes to `inside_sales_fyi`; a false positive must be visible.
+- REQ-054 Every declared category has a check that fails when its detector is deleted.
+  R29-F3: `BULK_MAILING` had **zero** coverage — a blanket fixture retarget removed its
+  check and never replaced it, so deleting `_bulk_headers` entirely left the suite green
+  while the loop header still claimed "the six junk categories".
+- REQ-055 A check must be able to fail. R29-F4: the check added to close R27-F4 asserted
+  `"report:" in out`, which is unconditionally true — a tautology. Rounds 26, 27 and 28
+  each had 9 behaviour-changing mutations survive; round 29 had 10 of 24. The round-29
+  fix pass mutation-tested every fix and **0 of 8 survived**.
+- REQ-056 A guard's own failure never stops the run. R29-F6: `_load_reason_pattern`
+  omitted the `TypeError` its sibling `_load_enums` catches, so a malformed schema
+  crashed the gate with rc=1 instead of failing open.
+
+**What the feature is now, honestly.** It suppresses machine-generated noise —
+auto-replies, bounces, spec-free bulk mail — and nothing else. Invoices, bare
+acknowledgements, internal notes and hose-industry newsletters all reach the engine and
+produce a draft an operator dismisses. That is a large reduction in scope from phase 5's
+ambition, and it is the correct trade: the phase-5 constraint says losing a real RFQ is
+far worse than passing junk through, and two rounds of measurement showed prose-based
+judgement cannot be made safe.
+
 ## Constraints
 
 - **Never edit `src/vendor/`** to change an outcome. It is a stamped verbatim copy;

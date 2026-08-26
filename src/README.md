@@ -76,17 +76,23 @@ quietly wrong.**
   stock questions are acknowledged and routed to a human.
 - Exit code **2** — "a draft with open items" — is the normal outcome. Exit 0 is
   reserved and in practice unreachable. Treating 2 as an error upstream is a bug.
-- The input filter never silently discards a message. It decides, before the
-  engine runs, whether a message looks like a bounce, an auto-reply, bulk mail,
-  an invoice, a bare acknowledgement or internal chatter. What protects a real
-  request is the **specifications in it**: if the engine can extract even one
-  spec field, the message goes through — only true list-mail (`List-Unsubscribe`
-  plus `Precedence: bulk`/`List-Id`) is filtered despite carrying specs, because
-  nobody orders hose from a mailing list. Anything the gate cannot resolve
-  confidently also goes through. Every filtered message leaves a
-  machine-readable record of what it was and why, content-category filtering
-  routes to a human rather than to `no_action`, and `--no-filter` always lets an
-  operator force a run through by hand.
+- The input filter screens only what a sender's SOFTWARE declares, never what a
+  message's prose looks like. Three categories survive: an RFC 3834 automatic
+  **reply** (`Auto-Submitted: auto-replied`), an RFC 3464 **delivery report**, and
+  **list mail** (`List-Unsubscribe` with `Precedence: bulk` or a `List-Id`).
+  Invoices, bare acknowledgements and internal notes are NOT filtered — judging
+  those by their wording dropped 11 of 46 genuine RFQs in testing, so the
+  capability was removed rather than tuned. A supplier newsletter that names hose
+  specifications also reaches the engine.
+- What protects a request is the **specifications in its body**. If the engine
+  extracts any spec field from the body, the message goes through, whatever its
+  headers say. The body is measured rather than the subject because an
+  out-of-office responder echoes the RFQ subject back verbatim. `auto-generated`
+  is deliberately not a trigger — that is what ERPs stamp on real requisitions;
+  only `auto-replied` says "this is a reply to another message".
+- Nothing routes colder than a human queue except the two protocol reports.
+  Every filtered message leaves a machine-readable record of what it was and why,
+  and `--no-filter` always lets an operator force a run through by hand.
 
 ## What is inside
 
