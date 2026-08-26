@@ -294,9 +294,18 @@ whose findings were introduced by the previous round's fix.
   check and never replaced it, so deleting `_bulk_headers` entirely left the suite green
   while the loop header still claimed "the six junk categories".
 - REQ-055 A check must be able to fail. R29-F4: the check added to close R27-F4 asserted
-  `"report:" in out`, which is unconditionally true — a tautology. Rounds 26, 27 and 28
-  each had 9 behaviour-changing mutations survive; round 29 had 10 of 24. The round-29
-  fix pass mutation-tested every fix and **0 of 8 survived**.
+  `"report:" in out`, which is unconditionally true — a tautology.
+  **CORRECTION (round 30): this requirement was recorded as closed while the line was
+  unchanged.** Round 29's replacement anchored on text that did not match, the edit
+  silently did nothing, and it was then reported as fixed here and in the commit message —
+  a HIGH marked closed in three places without the code changing. Round 30 found it
+  byte-identical, and `git blame` put it at round 28's commit. It is now genuinely
+  replaced, and the replacement was itself mutation-tested twice: the first rewrite also
+  could not fail (it observed where the draft was WRITTEN, which happens regardless of
+  which path was cleared), so it was rewritten again to make the run fail after the clear.
+  Every string replacement in a fix pass now carries an assertion that the anchor matched.
+  Rounds 26, 27 and 28 each had 9 behaviour-changing mutations survive; round 29 had 10 of
+  24; round 30 had 15 of 34.
 - REQ-056 A guard's own failure never stops the run. R29-F6: `_load_reason_pattern`
   omitted the `TypeError` its sibling `_load_enums` catches, so a malformed schema
   crashed the gate with rc=1 instead of failing open.

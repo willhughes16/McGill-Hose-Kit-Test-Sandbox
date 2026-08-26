@@ -870,15 +870,27 @@ with open(driver, "w", encoding="utf-8") as fh:
         "stale(); run_engine.main(['--in','rfq.eml','--state','_report/state.json'])\n"
         "res.append('engine:' + ('SURVIVED' if os.path.exists("
         "run_state.ARTIFACTS['synthetic']) else 'CLEARED'))\n"
-        "stale(); generate_report.main(['--state','_report/state.json'])\n"
-        "res.append('report:' + ('SURVIVED' if os.path.exists("
-        "run_state.ARTIFACTS['synthetic']) else 'CLEARED'))\n"
+        "# The report phase owns ONE artifact, so it must follow a RENAMED\n"
+        "# declaration rather than a literal path. Round 30 found the old check\n"
+        "# here asserting `\"report:\" in out` -- unconditionally true, a\n"
+        "# tautology that survived two rounds and left this untested.\n"
+        "run_state.ARTIFACTS['bom_draft'] = os.path.join('_report', 'renamed.md')\n"
+        "open(run_state.ARTIFACTS['bom_draft'], 'w').write('stale-draft')\n"
+        "# Make the run FAIL after the clear. The write would otherwise overwrite\n"
+        "# the stale file whatever path was cleared, which is why the first\n"
+        "# version of this check also could not fail (round 30).\n"
+        "os.remove(os.path.join('_report', 'case_state.json'))\n"
+        "rc = generate_report.main(['--state','_report/state.json'])\n"
+        "survived = os.path.exists(run_state.ARTIFACTS['bom_draft'])\n"
+        "res.append('renamed:' + ('HARDCODED' if survived else 'FOLLOWED')"
+        " + ':rc=%s' % rc)\n"
         "print(' '.join(res))\n")
 rc, out, err = sh([driver], d)
 check("the extract phase clears a newly declared artifact",
-      "engine:CLEARED" in out, f"out={out.strip()[-70:]}")
-check("the report phase does not hard-code its path either",
-      "report:" in out, f"out={out.strip()[-70:]} err={err.strip()[-70:]}")
+      "engine:CLEARED" in out, f"out={out.strip()[-90:]}")
+check("the report phase follows a RENAMED declaration, not a literal path",
+      "renamed:FOLLOWED" in out,
+      f"out={out.strip()[-90:]} err={err.strip()[-90:]}")
 shutil.rmtree(d)
 
 failed = [r for r in results if not r[1]]
