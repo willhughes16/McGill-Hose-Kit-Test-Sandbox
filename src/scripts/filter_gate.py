@@ -68,8 +68,9 @@ for _p in (_VENDOR, _HERE):
 
 from email_to_bom import core, mail, triage  # noqa: E402  (needs sys.path above)
 from run_state import (  # noqa: E402
-    ARTIFACTS, FILTER_KEY, StateError, artifact_paths, invalidate,
+    ARTIFACTS, FILTER_KEY, StateError, all_artifacts, artifact_paths, invalidate,
     make_filter_decision, normalize_invocation, normalize_screen_request,
+    screen_applies,
     read_state, write_state,
 )
 
@@ -192,6 +193,47 @@ def _collect_text(msg, signals):
     return "\n".join(texts), undecodable
 
 
+# Fields the vendored extractor fills from a real specification. Read off the
+# engine, not re-listed vocabulary: this counts HOW MUCH the customer specified.
+_SPEC_FIELDS = ("size", "length", "quantity", "material", "media",
+                "pressure", "temperature")
+
+
+def _tier_for(code, signals):
+    """The declared filter tier for a category code. Data, not code."""
+    for cat in signals.get("categories", []):
+        if cat.get("code") == code:
+            # Default to the SAFE tier when a category forgets to declare one:
+            # an undeclared category must not gain the power to drop a spec-
+            # bearing message just by omission.
+            return cat.get("filter_tier", "requires_no_specs")
+    return "requires_no_specs"
+
+
+def _spec_depth(agent, low):
+    """How many specification fields the engine extracts from this message.
+
+    The round-27 replacement for `quote_request_cues` as the thing protecting a
+    real RFQ. A phrase list is an enumeration and sat on the unsafe side of the
+    decision; this is a measured property of the message and it is monotone --
+    more customer detail means more protection, with no vocabulary to keep up to
+    date. Junk carries zero: every filtered fixture except the newsletter
+    extracts nothing at all, while the RFQs round 27 wrongly dropped extract
+    three to five fields.
+    """
+    if agent is None:
+        return 99      # no extractor => unknown depth => fail toward the engine
+    try:
+        e = agent.extract(low)
+    except Exception:  # noqa: BLE001 - never let the guard's own failure filter
+        return 99      # unknown depth counts as "specified": fail toward the engine
+    n = sum(1 for f in _SPEC_FIELDS
+            if getattr(e, f, None) not in (None, "", [], {}))
+    if getattr(e, "ends", None):
+        n += 1
+    return n
+
+
 def _is_request_act(low, klass, rules, signals):
     """Is this a request AT ALL, independent of product words -- the engine
     assumes yes, so this is genuinely new vocabulary (ADR-005's sibling)."""
@@ -211,14 +253,20 @@ def _is_request_act(low, klass, rules, signals):
 # ------------------------------ header-tier detectors -------------------------
 
 def _dsn_headers(headers, signals):
+    """A real bounce, evidenced by the CONJUNCTION of its two markers.
+
+    Round 27 (R27-F2) took each marker as sufficient on its own, so a
+    `postmaster@` sender, or a bare `Return-Path: <>`, or any `multipart/report`
+    dropped a message whose subject read "RFQ - hose assemblies, please quote".
+    A genuine DSN is a report-type=delivery-status multipart WITH a null return
+    path; a human forwarding a bounce has neither. Requiring both costs nothing
+    real and removes three false-positive routes.
+    """
     ctype = str(headers.get("Content-Type", "") or "").lower()
-    if "multipart/report" in ctype and "delivery-status" in ctype:
+    is_report = "multipart/report" in ctype and "delivery-status" in ctype
+    null_return = str(headers.get("Return-Path", "") or "").strip() in ("<>", "")
+    if is_report and null_return:
         return str(headers.get("Content-Type", "")).strip()
-    sender = _local_part(headers.get("From"))
-    if sender and sender in signals.get("dsn_sender_localparts", []):
-        return str(headers.get("From", "")).strip()
-    if str(headers.get("Return-Path", "") or "").strip() == "<>":
-        return "Return-Path: <>"
     return None
 
 
@@ -300,7 +348,7 @@ _CONTENT_DETECTORS = {
 
 # ---------------------------------- decide() ----------------------------------
 
-def decide(raw, filename, rules, signals):
+def decide(raw, filename, rules, signals, agent=None):
     """The ONE seam: decide whether `raw` (the input's bytes) should be
     filtered. Never raises -- any internal failure is caught and treated as
     ambiguity, which resolves to NOT filtered (ADR-001). Returns a partial
@@ -309,13 +357,13 @@ def decide(raw, filename, rules, signals):
     `filter` record (`run_state.make_filter_decision`).
     """
     try:
-        return _decide(raw, filename, rules, signals)
+        return _decide(raw, filename, rules, signals, agent)
     except Exception:  # noqa: BLE001 - deliberate; see module docstring / ADR-001
         return {"filtered": False, "code": None, "route": None,
                 "evidence": None, "reason": "parse_failed"}
 
 
-def _decide(raw, filename, rules, signals):
+def _decide(raw, filename, rules, signals, agent=None):
     mail_like = mail.looks_like_mime(raw, filename)
     headers = None
     if mail_like:
@@ -338,13 +386,9 @@ def _decide(raw, filename, rules, signals):
                 header_hit = (cat["code"], cat["route"], evidence)
                 break
 
-    # DSN is the one category exempt from the quoting-request veto -- a bounce
-    # is never a request -- so it can filter immediately without paying for a
-    # body decode at all.
-    if header_hit is not None and header_hit[0] == "DELIVERY_STATUS_NOTIFICATION":
-        code, route, evidence = header_hit
-        return {"filtered": True, "code": code, "route": route,
-                "evidence": evidence[:80], "reason": None}
+    # NOTHING short-circuits the guards below. Round 27 (R27-F2) let DSN filter
+    # before them "because a bounce is never a request", which dropped a labelled
+    # RFQ whose only sin was a multipart/report content type.
 
     try:
         msg = BytesParser(policy=policy.default).parsebytes(raw)
@@ -371,8 +415,31 @@ def _decide(raw, filename, rules, signals):
         return {"filtered": False, "code": None, "route": None,
                 "evidence": None, "reason": reason}
 
-    # The quoting-request veto: filter only if there is NO quoting request,
-    # where a quoting request is product_signal AND request_act.
+    # Fail-open on anything we could not fully read. Round 27 (R27-F3) found
+    # `undecodable` was computed and then never consulted, so the fail-open the
+    # docs promised did not exist and an HTML body crossing a size threshold
+    # flipped the decision. A message we cannot fully read is a message we must
+    # not judge.
+    if undecodable:
+        return {"filtered": False, "code": None, "route": None,
+                "evidence": None, "reason": "undecodable_content"}
+
+    code, route, evidence = candidate
+    tier = _tier_for(code, signals)
+
+    # GUARD 1 -- specification depth, a measured property of the message.
+    # 'requires_no_specs' categories may filter ONLY when the engine extracts
+    # nothing at all. This replaces the 16-phrase cue list that round 27 (R27-F1)
+    # defeated with one line of "Terms net 30." on a 200-foot EPDM order.
+    if tier != "always":
+        depth = _spec_depth(agent, low)
+        if depth > 0:
+            return {"filtered": False, "code": None, "route": None,
+                    "evidence": None, "reason": f"specifications_present:{depth}"}
+
+    # GUARD 2 -- the quoting-request veto, kept as a second net. It is no longer
+    # load-bearing (guard 1 is), which is the point: an enumeration must never be
+    # the only thing between a real customer request and a silent drop.
     klass, _ev = triage.classify(low, rules)
     product_signal = klass != "out_of_scope"
     request_act = _is_request_act(low, klass, rules, signals)
@@ -380,7 +447,6 @@ def _decide(raw, filename, rules, signals):
         return {"filtered": False, "code": None, "route": None,
                 "evidence": None, "reason": "quoting_request_detected"}
 
-    code, route, evidence = candidate
     return {"filtered": True, "code": code, "route": route,
             "evidence": evidence[:80], "reason": None}
 
@@ -439,15 +505,18 @@ def main(argv=None):
     # shape) -- clear both artifacts on EVERY branch below, before anything
     # that can fail.
     try:
-        invalidate([paths["case_state"], paths["bom_draft"]])
+        invalidate(all_artifacts(case_state=args.out, bom_draft=args.draft))
     except StateError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
 
     override = bool(args.no_filter)
     if not override and args.state:
+        # A recorded override governs only the message it was granted for
+        # (round 27): a stale record from the previous run must not silently
+        # disable the safeguard for a different email.
         screen = normalize_screen_request(read_state(args.state).get("screen"))
-        override = bool(screen and screen.get("override"))
+        override = screen_applies(screen, input_path)
 
     if override:
         # Opting out is explicit and loud (CONVENTIONS) -- this is C6's
@@ -466,13 +535,17 @@ def main(argv=None):
 
         signals = _load_signals()
         allowed_codes, allowed_routes = _load_enums()
-        rules = None
+        rules, agent = None, None
         if signals is not None:
             try:
-                rules = (core.load_config(args.config_dir) if args.config_dir
-                          else core.load_config())["rules"]
+                cfg = (core.load_config(args.config_dir) if args.config_dir
+                       else core.load_config())
+                rules = cfg["rules"]
+                # The SAME cfg powers the depth guard's extractor and the veto's
+                # classifier, so the two guards can never disagree about config.
+                agent = core.Agent(cfg)
             except Exception:  # noqa: BLE001 - an unreadable config is ambiguity
-                rules = None
+                rules, agent = None, None
 
         if signals is None or rules is None:
             print("warning: filter reference data unavailable; failing open "
@@ -481,7 +554,7 @@ def main(argv=None):
                              "evidence": None, "reason": "no_evidence"}
         else:
             raw_decision = decide(raw, os.path.basename(input_path), rules,
-                                   signals)
+                                   signals, agent)
 
         code, route = raw_decision.get("code"), raw_decision.get("route")
         code_ok = allowed_codes is None or code in allowed_codes

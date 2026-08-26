@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Filter decision — the input-filter gate's record of whether an inbound message reached the engine",
+  "title": "Filter decision \u2014 the input-filter gate's record of whether an inbound message reached the engine",
   "description": "Written into _report/state.json under the \"filter\" key by scripts/filter_gate.py. `code` and `route` are the closed vocabulary declared by reference/filter_signals.json's `categories` list (t1); both admit null for the pass-through case, where nothing was filtered so there is no category to report. `reason` is a separate closed vocabulary explaining WHY a message passed through (or was forced through), independent of the category vocabulary used when a message is filtered.",
   "type": "object",
   "required": [
@@ -15,7 +15,7 @@
     },
     "input": {
       "type": "string",
-      "description": "The exact input path the gate was given — unmodified, so a filtered message can be identified and replayed (C6)."
+      "description": "The exact input path the gate was given \u2014 unmodified, so a filtered message can be identified and replayed (C6)."
     },
     "code": {
       "type": [
@@ -48,7 +48,10 @@
       "description": "Where a filtered message should go, or null when the message was not filtered. Deliberately disjoint from open_items[].route and routing.recommendation, so a consumer can never mistake a filtered message for a routed-but-undrafted case."
     },
     "evidence": {
-      "type": "string",
+      "type": [
+        "string",
+        "null"
+      ],
       "maxLength": 80,
       "description": "Short verbatim signal that drove the decision (a header value or matched phrase)."
     },

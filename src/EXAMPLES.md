@@ -165,12 +165,33 @@ filtered run is never left sitting beside a stale draft).
   unwritable state). The gate never emits the engine's own `2`; treat `3`
   the same way you treat the engine's `2` — a normal, expected outcome, not
   a failure.
+- **What actually protects a real RFQ: the specifications in it.** The gate
+  measures how many specification fields the vendored engine extracts from a
+  message — size, length, quantity, material, media, pressure, temperature, end
+  connections. Any message with **at least one** extracted specification is
+  passed to the engine, except for true list-mail (see below). This is a measured
+  property, not a phrase list, and it is monotone: the more a customer specifies,
+  the more protected they are. An earlier version protected RFQs with a 16-phrase
+  "quote request" list instead, and one line of `Terms net 30.` was enough to
+  drop a 200-foot EPDM order — the list was on the wrong side of the decision.
+- **Only true list-mail may be filtered despite carrying specifications.** A
+  `List-Unsubscribe` header together with `Precedence: bulk` or a `List-Id` is
+  mail nobody sends to place an order — a buyer does not subscribe a supplier to
+  their own RFQ. That is why a hose-industry newsletter full of product names is
+  still filtered while an RFQ that merely mentions an invoice is not.
 - **The filter fails toward running the engine.** Everything the gate cannot
-  resolve confidently — no text obtained, a parse defect, an HTML-only body
-  over its scan budget, an unrecognised or undecodable part, an undeclared
-  code/route, unreadable reference data — resolves to *not filtered*, so a
-  real RFQ is never silently dropped for being ambiguous. Only a hard input
-  error (the path itself missing or unreadable) is loud and stops the run.
+  resolve confidently — no text obtained, a parse defect, an HTML-only body over
+  its scan budget, an unrecognised or undecodable part, an undeclared code/route,
+  unreadable reference data, or a failure inside the gate itself — resolves to
+  *not filtered*. Only a hard input error (the path itself missing or unreadable)
+  is loud and stops the run.
+- **Known limit.** A genuine request carrying *no* extractable specification —
+  "please quote the attached drawing", with the detail only in an attachment —
+  and also carrying a junk signal can still be filtered. Such a message is routed
+  to a human queue (`inside_sales_fyi` / `accounts_payable` / `internal_ops`),
+  never to `no_action`, so it is visible rather than discarded, and `--no-filter`
+  processes it. Real RFQ corpora would tell us how often this shape occurs; it has
+  not been measured.
 - **Direct, without Astro, the documented sequence runs the gate first.**
   ```
   python3 scripts/filter_gate.py --in rfq.eml --state _report/state.json

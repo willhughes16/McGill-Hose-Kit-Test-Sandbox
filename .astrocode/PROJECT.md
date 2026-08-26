@@ -179,6 +179,48 @@ Hard constraints inherited from the kit:
 - Every filtered message needs a machine-readable reason and a route, consistent
   with how `open_items` already carry codes and routes.
 
+### Round 27 (blind verification) — closed findings, now requirements
+
+Round 27 returned **FAIL** with two CRITICALs. Bar: `ACCEPTANCE_ROUND27.md`; report:
+`VERIFICATION_ROUND27.md`. It found the filter dropping **24 of 35 genuine RFQs** — and
+that version was published as v0.4.0. It has been deleted from the instance, which is
+back on filter-free v0.3.0.
+
+- REQ-037 What protects a real request is a MEASURED property of the message, never a
+  phrase list. `_spec_depth()` counts the specification fields the vendored engine
+  extracts; a `requires_no_specs` category may filter only at depth 0. R27-F1: the old
+  protection was a 16-phrase `quote_request_cues` list sitting on the *unsafe* side of
+  the decision, so one line of `Terms net 30.` dropped a 200-foot EPDM order, and
+  `Please price this.` lost a message that `Please quote this.` kept. The guard is
+  monotone — more customer detail means more protection — and there is no vocabulary to
+  keep current.
+- REQ-038 Only true list-mail may filter a spec-bearing message. `filter_tier` is
+  declared per category in `filter_signals.json`: `always` for `List-Unsubscribe` plus
+  `Precedence: bulk`/`List-Id` (nobody orders hose from a mailing list), and
+  `requires_no_specs` for everything else. A category that omits the field defaults to
+  the SAFE tier — omission must not grant the power to drop work.
+- REQ-039 No category short-circuits the guards. R27-F2: DSN returned before the veto
+  "because a bounce is never a request", so a `multipart/report` content type, a
+  `postmaster@` sender or a bare `Return-Path: <>` each dropped a labelled RFQ. DSN now
+  requires the CONJUNCTION of report-type=delivery-status and a null return path, and
+  passes through the same guards as everything else.
+- REQ-040 A message that cannot be fully read is never judged. R27-F3: `undecodable` was
+  computed and never consulted, so the documented fail-open did not exist and two
+  messages identical but for HTML body size decided oppositely.
+- REQ-041 Invalidation is driven by the ARTIFACTS declaration, proven by test. R27-F4:
+  all three clearing sites hand-wrote the filenames, so REQ-029's claim was FALSE and
+  R26-F1's mechanism was intact behind a docstring asserting otherwise. `all_artifacts()`
+  is now the only way to clear, and the self-test adds a synthetic artifact and requires
+  it to be cleared with no call site edited.
+- REQ-042 An override is an explicit choice, scoped to its message. Round 27:
+  `bool(raw["override"])` enabled it for the STRING `"false"`, and the record was never
+  cleared so an override granted for one email governed the next run. Now strict-boolean
+  and bound to the input it was granted for.
+- REQ-043 Coverage drives the SHIPPED path. R27-F5: 9 of 20 mutations left the suite
+  green, including deleting the override read — the check exercised `--no-filter` on the
+  command line while the recipe only ever uses `--from-state` plus the record. All
+  round-27 checks drive `--from-state`, and each new guard is mutation-proved.
+
 ## Constraints
 
 - **Never edit `src/vendor/`** to change an outcome. It is a stamped verbatim copy;

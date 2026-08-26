@@ -1,39 +1,45 @@
 {
-  "_note": "The screen phase's own vocabulary (Phase 05). Absence of evidence is NEVER grounds to filter: every list here is used to find a POSITIVE signal for a junk category, never to find the absence of a quoting request. Product, media and fitting vocabulary belongs to the engine (vendor/config/rules.json) and is deliberately NOT duplicated here (CONVENTIONS: never re-express an engine rule in kit code) — the quoting-request veto asks the vendored classifier itself.",
-  "_categories_note": "ORDERED — list order is behaviour, first match wins, exactly like rules.json's own precedence lists. code is SCREAMING_SNAKE like open_items[].code. route is deliberately DISJOINT from open_items[].route (inside_sales, order_desk, account_owner, catalog_lookup) and routing.recommendation (inside_sales_review, order_desk, account_owner), so a consumer can never mistake a filtered message for a routed-but-undrafted case. detector names the tier/check in filter_gate.py that decides this category.",
+  "_note": "The screen phase's own vocabulary (Phase 05). Absence of evidence is NEVER grounds to filter: every list here is used to find a POSITIVE signal for a junk category, never to find the absence of a quoting request. Product, media and fitting vocabulary belongs to the engine (vendor/config/rules.json) and is deliberately NOT duplicated here (CONVENTIONS: never re-express an engine rule in kit code) \u2014 the quoting-request veto asks the vendored classifier itself.",
+  "_categories_note": "ORDERED \u2014 list order is behaviour, first match wins, exactly like rules.json's own precedence lists. code is SCREAMING_SNAKE like open_items[].code. route is deliberately DISJOINT from open_items[].route (inside_sales, order_desk, account_owner, catalog_lookup) and routing.recommendation (inside_sales_review, order_desk, account_owner), so a consumer can never mistake a filtered message for a routed-but-undrafted case. detector names the tier/check in filter_gate.py that decides this category.",
   "categories": [
     {
       "code": "DELIVERY_STATUS_NOTIFICATION",
       "route": "no_action",
-      "detector": "dsn_headers"
+      "detector": "dsn_headers",
+      "filter_tier": "requires_no_specs"
     },
     {
       "code": "AUTO_REPLY",
       "route": "no_action",
-      "detector": "auto_reply_header"
+      "detector": "auto_reply_header",
+      "filter_tier": "requires_no_specs"
     },
     {
       "code": "BULK_MAILING",
       "route": "no_action",
-      "detector": "bulk_headers"
+      "detector": "bulk_headers",
+      "filter_tier": "always"
     },
     {
       "code": "INVOICE_OR_STATEMENT",
       "route": "accounts_payable",
-      "detector": "invoice_content"
+      "detector": "invoice_content",
+      "filter_tier": "requires_no_specs"
     },
     {
       "code": "BARE_ACKNOWLEDGEMENT",
       "route": "inside_sales_fyi",
-      "detector": "ack_content"
+      "detector": "ack_content",
+      "filter_tier": "requires_no_specs"
     },
     {
       "code": "INTERNAL_CHATTER",
       "route": "internal_ops",
-      "detector": "internal_domain_content"
+      "detector": "internal_domain_content",
+      "filter_tier": "requires_no_specs"
     }
   ],
-  "_quote_request_cues_note": "request_act half of the quoting-request veto: is this a request AT ALL, independent of product words (the engine assumes yes, so this is genuinely new vocabulary, not a second copy of a rule). Phrases only — no product/media/fitting nouns.",
+  "_quote_request_cues_note": "request_act half of the quoting-request veto: is this a request AT ALL, independent of product words (the engine assumes yes, so this is genuinely new vocabulary, not a second copy of a rule). Phrases only \u2014 no product/media/fitting nouns.",
   "quote_request_cues": [
     "request for quote",
     "requesting a quote",
@@ -52,7 +58,7 @@
     "send me a quote",
     "quote on"
   ],
-  "_invoice_phrases_note": "Positive invoice/statement evidence in subject or body (content tier — no protocol header marks this category).",
+  "_invoice_phrases_note": "Positive invoice/statement evidence in subject or body (content tier \u2014 no protocol header marks this category).",
   "invoice_phrases": [
     "invoice",
     "statement of account",
@@ -67,7 +73,7 @@
     "please remit",
     "terms net"
   ],
-  "_ack_phrases_note": "Used under a dominance test in filter_gate.py: after stripping quoted history and signature, the remainder must be UNDER ack_max_chars AND match one of these — never bare substring presence against the raw body.",
+  "_ack_phrases_note": "Used under a dominance test in filter_gate.py: after stripping quoted history and signature, the remainder must be UNDER ack_max_chars AND match one of these \u2014 never bare substring presence against the raw body.",
   "ack_phrases": [
     "thanks, got it",
     "got it, thanks",
@@ -112,13 +118,14 @@
     "bounces",
     "bounce-daemon"
   ],
-  "_bulk_precedence_values_note": "Precedence header values that corroborate List-Unsubscribe for the bulk-mailing tier. List-Unsubscribe alone is never sufficient (a real customer can run a mailer too) — it must be paired with one of these or with List-Id.",
+  "_bulk_precedence_values_note": "Precedence header values that corroborate List-Unsubscribe for the bulk-mailing tier. List-Unsubscribe alone is never sufficient (a real customer can run a mailer too) \u2014 it must be paired with one of these or with List-Id.",
   "bulk_precedence_values": [
     "bulk",
     "list",
     "junk"
   ],
-  "_thresholds_note": "ack_max_chars bounds the dominance test for BARE_ACKNOWLEDGEMENT (short polite remainder only). html_scan_bytes bounds the HTML-only fallback body the gate will run mail.html_to_text on before failing open — chosen to stay well under the engine's superlinear cost at the ~1 MB scale the gate must handle in under a couple of seconds (FOLLOW-UP-9).",
+  "_thresholds_note": "ack_max_chars bounds the dominance test for BARE_ACKNOWLEDGEMENT (short polite remainder only). html_scan_bytes bounds the HTML-only fallback body the gate will run mail.html_to_text on before failing open \u2014 chosen to stay well under the engine's superlinear cost at the ~1 MB scale the gate must handle in under a couple of seconds (FOLLOW-UP-9).",
   "ack_max_chars": 120,
-  "html_scan_bytes": 65536
+  "html_scan_bytes": 65536,
+  "_filter_tier_note": "ROUND 27 (R27-F1/F2). 'always' may filter a message even when it carries product specifications: only true list-mail headers (List-Unsubscribe + Precedence/List-Id) qualify, because no buyer subscribes a supplier to their own RFQ. Everything else is 'requires_no_specs' and may filter ONLY when the vendored engine extracts ZERO specification fields from the message. Round 27 filtered 24 of 35 genuine RFQs because the protection was an enumeration (a 16-phrase 'quote_request_cues' list) sitting on the UNSAFE side of the decision: one line of 'Terms net 30.' dropped a 200-foot EPDM order. Spec depth is a measured property of the message, not a list, and it is monotone -- the more a customer specifies, the more protected they are."
 }

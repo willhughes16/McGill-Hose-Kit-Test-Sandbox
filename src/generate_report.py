@@ -96,7 +96,7 @@ def main(argv=None):
     # Clear our own artifact before anything that can fail, so no failure path
     # leaves the previous run's draft behind (R26-F1). Loud on failure (R26-F5).
     try:
-        invalidate([paths["bom_draft"]])
+        invalidate([artifact_paths(bom_draft=args.out)["bom_draft"]])
     except StateError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1

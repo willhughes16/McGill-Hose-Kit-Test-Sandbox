@@ -77,11 +77,16 @@ quietly wrong.**
 - Exit code **2** — "a draft with open items" — is the normal outcome. Exit 0 is
   reserved and in practice unreachable. Treating 2 as an error upstream is a bug.
 - The input filter never silently discards a message. It decides, before the
-  engine runs, whether a message looks like a bounce, an auto-reply, bulk
-  mail, an invoice, a bare acknowledgement or internal chatter — and fails
-  toward running the engine on anything it cannot resolve confidently. Every
-  filtered message leaves a machine-readable record of what it was and why,
-  and `--no-filter` always lets an operator force a run through by hand.
+  engine runs, whether a message looks like a bounce, an auto-reply, bulk mail,
+  an invoice, a bare acknowledgement or internal chatter. What protects a real
+  request is the **specifications in it**: if the engine can extract even one
+  spec field, the message goes through — only true list-mail (`List-Unsubscribe`
+  plus `Precedence: bulk`/`List-Id`) is filtered despite carrying specs, because
+  nobody orders hose from a mailing list. Anything the gate cannot resolve
+  confidently also goes through. Every filtered message leaves a
+  machine-readable record of what it was and why, content-category filtering
+  routes to a human rather than to `no_action`, and `--no-filter` always lets an
+  operator force a run through by hand.
 
 ## What is inside
 

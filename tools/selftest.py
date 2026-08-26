@@ -459,6 +459,166 @@ check("filtering finishes in a couple of seconds, not engine-scale minutes",
       elapsed < 10, f"elapsed={elapsed:.2f}s")
 shutil.rmtree(d)
 
+
+# =============================== ROUND 27 ====================================
+# Round 27 filtered 24 of 35 genuine RFQs. These checks are the coverage that
+# would have caught it: the protection is now spec depth (a measured property),
+# and every check below drives the SHIPPED path, not a convenience path.
+
+GATE = os.path.join(ROOT, "src", "scripts", "filter_gate.py")
+
+def eml(d, name, text):
+    with open(os.path.join(d, name), "w", encoding="utf-8") as fh:
+        fh.write(text)
+    return name
+
+def prepare(d, inp, override=None):
+    """Write state.json the way the recipe's prepare phase does."""
+    st = {"invocation": {"input": inp, "component_ids": [], "coc": False,
+                         "config_dir": None}}
+    if override is not None:
+        st["screen"] = {"override": override, "input": inp}
+    with open(os.path.join(d, "_report", "state.json"), "w", encoding="utf-8") as fh:
+        json.dump(st, fh)
+
+def gate_from_state(d, *extra):
+    """The SHIPPED invocation: --from-state, exactly as the recipe uses it."""
+    return sh([GATE, "--from-state", "--state", "_report/state.json", *extra], d)
+
+def filt(d):
+    with open(os.path.join(d, "_report", "state.json"), encoding="utf-8") as fh:
+        return json.load(fh).get("filter", {})
+
+RFQ_BODY = ("We need 200 feet of 2 inch ID EPDM suction hose, male NPT both ends,\n"
+            "150 PSI working pressure, for ambient service on water transfer.\n"
+            "Please send your best price and lead time to my attention.\n")
+
+print("Round 27 / R27-F1 — a real RFQ is never filtered by a junk phrase")
+for label, extra_hdr, extra_body in [
+    ("net-30 terms",        "", "Terms net 30.\n"),
+    ("invoice wording",     "", "Invoice to AP on completion.\n"),
+    ("remit-to wording",    "", "Remit to accounting once quoted.\n"),
+    ("no-reply portal",     "From: no-reply@portal.acme.example\n", ""),
+    ("ERP Auto-Submitted",  "Auto-Submitted: auto-generated\n", ""),
+    ("internal forward",    "From: rep@mcgill.example\nTo: sales@mcgill.example\n", ""),
+]:
+    d = workdir()
+    hdr = extra_hdr or "From: buyer@acme.example\nTo: quotes@mcgill.example\n"
+    if "To:" not in hdr:
+        hdr += "To: quotes@mcgill.example\n"
+    name = eml(d, "rfq.eml", hdr + "Subject: Hose requirement\n\n" + RFQ_BODY + extra_body)
+    prepare(d, name)
+    rc, _, _ = gate_from_state(d)
+    check(f"RFQ + {label} reaches the engine", rc == 0,
+          f"exit={rc} code={filt(d).get('code')}")
+    shutil.rmtree(d)
+
+print("Round 27 / R27-F2 — a labelled RFQ inside a multipart/report is not a bounce")
+d = workdir()
+name = eml(d, "rfq.eml",
+           "From: buyer@acme.example\nTo: quotes@mcgill.example\n"
+           "Subject: RFQ - hose assemblies, please quote\n"
+           "Content-Type: multipart/report; report-type=delivery-status; boundary=z\n\n"
+           "--z\nContent-Type: text/plain\n\n" + RFQ_BODY + "--z--\n")
+prepare(d, name)
+rc, _, _ = gate_from_state(d)
+check("RFQ in multipart/report reaches the engine", rc == 0, f"exit={rc}")
+shutil.rmtree(d)
+
+print("Round 27 — the six junk categories STILL filter (the feature works)")
+for j, want in [("newsletter", "BULK_MAILING"), ("auto-reply", "AUTO_REPLY"),
+                ("delivery-status", "DELIVERY_STATUS_NOTIFICATION"),
+                ("bare-ack", "BARE_ACKNOWLEDGEMENT"),
+                ("invoice-statement", "INVOICE_OR_STATEMENT"),
+                ("internal-chatter", "INTERNAL_CHATTER")]:
+    d = workdir()
+    shutil.copy(os.path.join(ROOT, "tools", "filter", "fixtures", j, "input.eml"),
+                os.path.join(d, "junk.eml"))
+    prepare(d, "junk.eml")
+    rc, _, _ = gate_from_state(d)
+    check(f"{j} filters as {want}", rc == 3 and filt(d).get("code") == want,
+          f"exit={rc} code={filt(d).get('code')}")
+    check(f"{j} leaves no draft or CaseState",
+          sorted(artifacts(d)) == ["state.json"], f"artifacts={artifacts(d)}")
+    shutil.rmtree(d)
+
+print("Round 27 / R27-F5 — the override works on the SHIPPED path, not just the CLI")
+d = workdir()
+shutil.copy(os.path.join(ROOT, "tools", "filter", "fixtures", "newsletter", "input.eml"),
+            os.path.join(d, "junk.eml"))
+prepare(d, "junk.eml", override=True)
+rc, _, _ = gate_from_state(d)
+check("recorded override lets a filtered message through (--from-state)", rc == 0,
+      f"exit={rc}")
+check("the record says it was an override", filt(d).get("override") is True)
+shutil.rmtree(d)
+
+print("Round 27 — an override is an EXPLICIT choice, and is scoped to its message")
+d = workdir()
+shutil.copy(os.path.join(ROOT, "tools", "filter", "fixtures", "newsletter", "input.eml"),
+            os.path.join(d, "junk.eml"))
+prepare(d, "junk.eml", override="false")      # the STRING "false" is truthy in Python
+rc, _, _ = gate_from_state(d)
+check('override="false" does NOT disable the filter', rc == 3, f"exit={rc}")
+shutil.rmtree(d)
+
+d = workdir()
+for n in ("a.eml", "b.eml"):
+    shutil.copy(os.path.join(ROOT, "tools", "filter", "fixtures", "newsletter", "input.eml"),
+                os.path.join(d, n))
+prepare(d, "a.eml", override=True)
+with open(os.path.join(d, "_report", "state.json"), encoding="utf-8") as fh:
+    st = json.load(fh)
+st["invocation"]["input"] = "b.eml"           # override was granted for a.eml
+with open(os.path.join(d, "_report", "state.json"), "w", encoding="utf-8") as fh:
+    json.dump(st, fh)
+rc, _, _ = gate_from_state(d)
+check("an override granted for one message does not govern another", rc == 3,
+      f"exit={rc}")
+shutil.rmtree(d)
+
+print("Round 27 / R27-F3 — a message we cannot fully read is never filtered")
+# Round 27 found `undecodable` computed and never consulted, so two messages
+# identical but for HTML body size decided oppositely. Both shapes must be safe:
+# a junk phrase early with the specs past the scan budget must NOT filter.
+HDR = ('From: buyer@acme.example\nTo: quotes@mcgill.example\nSubject: Requirement\n'
+       'MIME-Version: 1.0\nContent-Type: text/html; charset="utf-8"\n\n')
+for label, doc in [
+    ("junk phrase early, specs past the budget",
+     HDR + "<html><body><p>Terms net 30. Remit to accounts payable.</p>\n"
+     + "<p>Quoted thread follows.</p>\n" * 2000
+     + "<p>We need 200 feet of 2 inch ID EPDM suction hose, male NPT both ends, "
+       "150 PSI working pressure.</p></body></html>"),
+    ("oversize body with a junk phrase at the end",
+     HDR + "<html><body>" + "<p>Spring specials on hose reels.</p>\n" * 2000
+     + "<p>Terms net 30. Remit to accounts.</p></body></html>"),
+]:
+    d = workdir()
+    name = eml(d, "big.eml", doc)
+    prepare(d, name)
+    rc, _, _ = gate_from_state(d)
+    check(f"oversize: {label} is not filtered", rc == 0,
+          f"exit={rc} code={filt(d).get('code')}")
+    shutil.rmtree(d)
+
+print("Round 27 / R27-F4 — invalidation is driven by the ARTIFACTS declaration")
+d = workdir(("rfq.eml", "confirmed-ids"))
+driver = os.path.join(d, "drive.py")
+with open(driver, "w", encoding="utf-8") as fh:
+    fh.write(
+        "import os, sys\n"
+        f"sys.path.insert(0, {os.path.join(ROOT, 'src', 'scripts')!r})\n"
+        "import run_state\n"
+        "run_state.ARTIFACTS['synthetic'] = os.path.join('_report', 'synthetic.txt')\n"
+        "open(run_state.ARTIFACTS['synthetic'], 'w').write('stale')\n"
+        "import run_engine\n"
+        "run_engine.main(['--in', 'rfq.eml', '--state', '_report/state.json'])\n"
+        "print('SURVIVED' if os.path.exists(run_state.ARTIFACTS['synthetic']) else 'CLEARED')\n")
+rc, out, err = sh([driver], d)
+check("a newly declared artifact is cleared without editing any call site",
+      "CLEARED" in out, f"out={out.strip()[-60:]} err={err.strip()[-80:]}")
+shutil.rmtree(d)
+
 failed = [r for r in results if not r[1]]
 print(f"\n{len(results) - len(failed)}/{len(results)} defences held")
 if failed:

@@ -143,20 +143,72 @@ def normalize_filter_decision(raw):
     return dec
 
 
-def make_screen_request(override=False):
+def _strict_bool(value):
+    """True only for a real boolean true, or an explicit true-ish JSON string.
+
+    Round 27 found `bool(raw.get("override"))` enabled the override for ANY
+    truthy value -- including the STRING "false", which is truthy in Python.
+    An override that disables the only safeguard against a silent drop must be
+    an explicit choice, so anything ambiguous reads as False. Same lesson as the
+    engine's own `approved is not True` check on write-back.
+    """
+    if value is True:
+        return True
+    if isinstance(value, str):
+        return value.strip().lower() in ("true", "yes", "1", "on")
+    return False
+
+
+def make_screen_request(override=False, input_path=None):
     """Build a screen-override record. The ONLY constructor.
 
     Records the operator's `--no-filter` choice for the prepare phase to write
     down once, so later phases read it back instead of the flag being re-typed.
+
+    It carries the input it was granted FOR. Round 27 found the record was never
+    cleared, so an override granted for one message silently governed the next
+    run in the same directory -- disabling the only safeguard against a silent
+    drop without anyone choosing that. Binding it to the input means a stale
+    record cannot apply to a different message; see `screen_applies()`.
     """
-    return {"override": bool(override)}
+    return {"override": _strict_bool(override), "input": input_path}
 
 
 def normalize_screen_request(raw):
     """Coerce a recorded screen request into the current shape, or return None."""
     if not isinstance(raw, dict):
         return None
-    return make_screen_request(bool(raw.get("override")))
+    return make_screen_request(_strict_bool(raw.get("override")),
+                               raw.get("input"))
+
+
+def screen_applies(screen, input_path):
+    """Whether a recorded override governs THIS message.
+
+    An override with no recorded input is honoured (older records, and the
+    documented `--no-filter` command-line form, which is scoped to its own run
+    by construction). An override recorded for a DIFFERENT input is ignored: it
+    was granted for another message.
+    """
+    if not screen or not screen.get("override"):
+        return False
+    recorded = screen.get("input")
+    if not recorded or not input_path:
+        return True
+    return os.path.abspath(recorded) == os.path.abspath(input_path)
+
+
+def all_artifacts(**overrides):
+    """Every artifact path a run owns, as a LIST, for invalidation.
+
+    Round 27 (R27-F4) found that although ARTIFACTS was declared centrally, all
+    three clearing sites hand-wrote `[paths["case_state"], paths["bom_draft"]]`.
+    Nothing consumed the declaration as a set, so adding a third artifact would
+    have been missed everywhere -- R26-F1's exact mechanism, intact behind a
+    docstring claiming otherwise. Clearing sites call THIS; they never name
+    files. Verified by the self-test adding a synthetic artifact.
+    """
+    return list(artifact_paths(**overrides).values())
 
 
 def invalidate(paths):
