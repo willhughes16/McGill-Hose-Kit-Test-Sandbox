@@ -74,6 +74,13 @@ def render(case):
     L.append(f"Open items: {len(items)}"
              + (f" ({blocking} blocking a quote)" if blocking else ""))
     L.append(f"Draft BOM lines: {len(lines)}")
+    # `classes` carries requirements the operator must honour — Certs Required
+    # from a C-of-C request is the one that matters. Round 32 pre-flight found it
+    # dropped entirely, which for a certificate requirement is exactly the kind
+    # of silent omission this kit exists to prevent.
+    classes = case.get("classes") or []
+    if classes:
+        L.append("Applies: " + ", ".join(str(c) for c in classes))
     routing = case.get("routing") or {}
     if routing:
         who = routing.get("recommendation")

@@ -395,6 +395,9 @@ check("every open item appears in the reply",
 check("every field appears in the reply",
       all(name in reply for name in cs.get("fields", {})),
       "a field was dropped from the reply")
+check("every `classes` entry appears (a C-of-C requirement must not vanish)",
+      all(str(c) in reply for c in (cs.get("classes") or [])),
+      f"classes={cs.get('classes')}")
 check("the routing recommendation appears",
       str((cs.get("routing") or {}).get("recommendation", "")) in reply)
 check("an unconfirmed field is marked as such",
