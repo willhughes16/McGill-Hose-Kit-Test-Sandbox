@@ -27,12 +27,24 @@ phases:
       you tried and STOP — do NOT guess at another file, and do NOT invent
       email content.
 
-      Step 3 — Create `_report/` and write `_report/state.json` with the
-      resolved input path and the optional flags, so later phases and any
-      resumed run read the same inputs.
+      Step 3 — Create `_report/` and write `_report/state.json` containing an
+      `invocation` object — and nothing else is needed:
+
+        {"invocation": {"input": "<resolved path>",
+                        "component_ids": [<any confirmed IDs>],
+                        "coc": <true|false>,
+                        "config_dir": <path or null>}}
+
+      This record is the ONLY place the run's arguments are written down. Phase 1
+      reads it with `--from-state`; you must NOT re-type the flags onto phase 1's
+      command line. Round 26 found that re-typing them here was an unguarded
+      second copy: drop `--coc` while composing phase 1 and both artifacts come
+      out perfectly self-consistent and quietly wrong about what the customer
+      asked for.
     constraints:
       - "Stay in pwd — do NOT cd or create files outside _report/"
       - "Required RFQ path missing → print usage and STOP"
+      - "Write EVERY parsed flag into state.json's invocation — later phases read it, not your command lines"
       - "NEVER fabricate or paraphrase email content — the engine reads the raw bytes"
       - "Use python3 for JSON file manipulation"
     input: []
@@ -46,12 +58,14 @@ phases:
     goal: >
       Produce the CaseState — the run's machine-readable contract.
 
-      Use: python3 scripts/run_engine.py --in <RFQ path>
-           --out _report/case_state.json --state _report/state.json
-      Pass through --component-ids / --coc / --config-dir exactly as given in
-      phase 0. The script records the COMPLETE invocation in state.json, which
-      is how phase 2 reproduces the identical engine call — you do not repeat
-      the flags there.
+      Use: python3 scripts/run_engine.py --from-state
+           --state _report/state.json --out _report/case_state.json
+
+      Do NOT re-type the flags. `--from-state` reads the invocation phase 0
+      recorded, and the same record is what phase 2 replays, so the arguments are
+      written down exactly once for the whole run. If the record is missing or
+      unusable the script stops — re-run phase 0 rather than passing flags by
+      hand.
 
       The script wraps the vendored deterministic engine and writes its output
       verbatim. Read the summary it prints, then STOP and read
@@ -76,6 +90,7 @@ phases:
       reword them. Your job is to report them faithfully.
     constraints:
       - "ALWAYS use scripts/run_engine.py — NEVER hand-write or edit case_state.json"
+      - "Use --from-state — never re-type the flags from phase 0 onto this command"
       - "engine_exit=2 is normal (draft with open items) — never report it as a failure"
       - "NEVER answer, drop, reword or re-prioritize an open item"
       - "NEVER invent a part number, price, lead time or stock position"

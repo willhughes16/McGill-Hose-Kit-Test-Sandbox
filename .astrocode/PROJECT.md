@@ -111,6 +111,50 @@ failure class landing in the kit itself: one rule in two places, one copy stale.
 - REQ-028 Fixture identities stay in reserved namespaces (F-7): `.example` per RFC
   2606 throughout, no ordinary `.com` anyone could own.
 
+### Round 26 (blind verification) — closed findings, now requirements
+
+Round 26 returned **FAIL**. Bar: `ACCEPTANCE_ROUND26.md`; report:
+`VERIFICATION_ROUND26.md`. Round 25's F-1 was confirmed genuinely fixed — and the
+fix pass then reproduced the same failure class twice. The lesson is now explicit:
+**a fix that names an item must be replaced by one that handles the category.**
+
+- REQ-029 Artifacts are a declared SET, not a list of names at each site.
+  `run_state.ARTIFACTS` is the single declaration; invalidation walks it. R26-F1:
+  the round-25 fix cleared `case_state.json` and missed `bom_draft.md`, so a failed
+  phase 2 left customer A's draft beside customer B's CaseState — and the fix made
+  the typo'd-path variant *worse*, deleting the CaseState so the stale draft was the
+  only artifact left and nothing could contradict it.
+- REQ-030 Failure handling does not enumerate exception types. R26-F2: swapping
+  `except SystemExit` for `except RuntimeError` let argparse's `SystemExit(2)`
+  escape from inside `cli.main`, so the wrapper exited **2** — the code every
+  document defines as normal success — with no artifact and no message. The wrappers
+  now catch broadly at two levels AND clamp their exit to 0/1, so no future path can
+  emit a success-looking code on a failure.
+- REQ-031 Reconciliation fails CLOSED. R26-F3: the guard was gated on
+  `os.path.isfile`, so an absent, directory or non-regular CaseState skipped the
+  check silently and a divergent pair could be landed. A missing CaseState is now an
+  error; skipping requires `--no-reconcile` explicitly.
+- REQ-032 Clearing and state-writing failures are LOUD. R26-F5: `except OSError:
+  pass` swallowed them, so under a read-only `_report/` the stale artifact survived
+  with no warning — reproducing the very defect the clearing exists to prevent.
+- REQ-033 The defences have their own tests. R26-F4: deleting the reconciliation
+  guard, or the stale-clearing, left parity at 7/7 green — parity compares outputs
+  and cannot see a failure path. `tools/selftest.py` covers exit codes, which
+  artifacts survive a failure, and whether the two artifacts agree. 25 checks,
+  each mutation-tested.
+- REQ-034 The invocation is recorded once, by the prepare phase, and read by every
+  later phase. R26-F6: phase 0 wrote a record nothing read, then the agent re-typed
+  the flags onto phase 1 — an unguarded second copy where dropping `--coc` yields
+  two perfectly self-consistent artifacts that are quietly wrong. Phase 1 now uses
+  `--from-state`.
+- REQ-035 A failed phase preserves its inputs. R26-F10: phase 1 wiped the prepare
+  phase's record before it could fail, leaving `state.json` as `{}` in exactly the
+  case where resuming matters. Invalidation now drops the *result* record only.
+- REQ-036 Published figures describe the shipped behaviour. R26-F7 (runtime was
+  quoted single-pass when a run makes three engine passes) and R26-F8 (fixture
+  counts wrong in both directions — 7 fixtures over 4 distinct inputs, not "six
+  fixtures, five distinct inputs").
+
 ## Constraints
 
 - **Never edit `src/vendor/`** to change an outcome. It is a stamped verbatim copy;
@@ -159,13 +203,16 @@ quietly treated as complete.
   running it as if the work were outstanding.
 - **FOLLOW-UP-5 — `download_url` is a placeholder.** `kit.json` still carries
   `https://TODO.example/...`; it is filled in by publishing, not by hand.
-- **FOLLOW-UP-6 — fixture corpus is thin and partly synthetic.** Six fixtures, five
-  distinct inputs, all from the source's own examples/tests. The identity lines of
+- **FOLLOW-UP-6 — fixture corpus is thin and partly synthetic.** Seven fixtures over
+  only **four distinct inputs** — `suction-assembly`, `confirmed-ids`, `human-render`
+  and `confirmed-ids-render` all share one `.eml` (verified by sha256), so the corpus
+  is narrower than the fixture count suggests. All from the source's own
+  examples/tests. The identity lines of
   the `suction-assembly` family were anonymised (technical content unchanged) before
   capture. Real RFQ `.eml` files from McGill would make parity claims much stronger;
   they have been requested.
 - **FOLLOW-UP-7 — the source's 507-test suite does not run here.** Parity covers the
-  six fixtures, not the full suite. The tests live in the source repo and are not
+  seven fixtures (four distinct inputs), not the full suite. The tests live in the source repo and are not
   vendored. A regression in a path no fixture touches would not be caught by this
   kit alone.
 - `src/vendor/config/catalog_candidates.json` ships but is never loaded by the
@@ -182,5 +229,7 @@ quietly treated as complete.
   8 KB, ~5 s at 134 KB, ~80 s at 538 KB, unbounded beyond. Measured as **inherited**:
   the source engine takes 88.0 s on the same 538 KB input and its output is
   byte-identical, so parity holds and the cost is the engine's, not the kit's. The kit
-  now warns above 100 KB and states an honest `estimated_duration`; a real fix (or a
-  documented input ceiling) belongs upstream.
+  now warns above 100 KB from both scripts and states an honest `estimated_duration`;
+  a real fix (or a documented input ceiling) belongs upstream. Note a kit run costs
+  THREE engine passes, so the end-to-end cost is ~3x the single-pass figures
+  (round 26, R26-F7).

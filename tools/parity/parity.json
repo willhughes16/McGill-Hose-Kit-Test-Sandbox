@@ -9,7 +9,8 @@
     "normalization": "NONE. Every fixture declares an empty normalize block. The engine has no clock, no randomness, no run-ids and emits no absolute paths on the CLI path; byte-identical output was confirmed across repeated runs and across PYTHONHASHSEED values. Nothing is masked, so parity cannot be silently loosened.",
     "fixture_inputs": "plain-steam / quoted-printable / multipart-html are the source's own test fixtures, copied verbatim (already anonymised: .example domains, 'Acme Dairy'). suction-assembly / confirmed-ids / human-render derive from the source's examples/sample_rfq.eml with the IDENTITY LINES ANONYMISED (real sender name, address and end-customer replaced); the technical content is unchanged, and the expected outputs were captured from the source engine running on these anonymised inputs, so parity remains a real capture.",
     "round_25_changes": "Fixture inputs moved to the RFC 2606 reserved .example TLD (round 25, F-7) and the affected expected outputs were re-captured from the source engine. Added the confirmed-ids-render fixture: the FLAGGED render path, which is the one combination no fixture covered and where round 25 found F-1 (flags dropped between phases, so the human draft contradicted the CaseState).",
-    "source_commit_note": "All 7 expected outputs re-captured at this single commit in round 25. b15b23d changed only tests/property/shape_matrix.py, so the engine content is identical to b1f9950, which src/vendor/PROVENANCE.md stamps as the vendoring commit."
+    "source_commit_note": "All 7 expected outputs re-captured at this single commit in round 25. b15b23d changed only tests/property/shape_matrix.py, so the engine content is identical to b1f9950, which src/vendor/PROVENANCE.md stamps as the vendoring commit.",
+    "round_26_changes": "Reconciliation now fails CLOSED, so the isolated-render fixture declares --no-reconcile explicitly. Defence behaviour (failure paths, exit codes, stale artifacts) is NOT parity-testable \u2014 parity compares outputs \u2014 so it moved to tools/selftest.py, which round 26 (R26-F4) showed was missing entirely."
   },
   "fixtures": [
     {
@@ -59,12 +60,13 @@
     },
     {
       "name": "human-render",
-      "command": "python3 src/generate_report.py --in {input} --state /dev/null --case-state /dev/null --out tools/parity/fixtures/human-render/actual_render.txt && python3 tools/parity/wrap_text.py tools/parity/fixtures/human-render/actual_render.txt {output}",
+      "command": "python3 src/generate_report.py --in {input} --no-reconcile --out tools/parity/fixtures/human-render/actual_render.txt && python3 tools/parity/wrap_text.py tools/parity/fixtures/human-render/actual_render.txt {output}",
       "input": "tools/parity/fixtures/human-render/input.eml",
       "output": "tools/parity/fixtures/human-render/actual_output.json",
       "expected_output": "tools/parity/fixtures/human-render/expected_output.json",
       "timeout": 60,
-      "normalize": {}
+      "normalize": {},
+      "_why": "Renders in ISOLATION \u2014 no CaseState exists in this fixture, so it must say --no-reconcile out loud. Round 26 (R26-F3) flipped the reconciliation default to fail-closed: an absent CaseState is now an error, not a silent skip."
     },
     {
       "name": "confirmed-ids-render",

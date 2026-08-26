@@ -27,6 +27,11 @@ The final deliverable is `_report/case_state.json`, the integration contract, wi
 4. Deliverables are produced by the kit's scripts (`scripts/run_engine.py`,
    `generate_report.py`) — if a script fails, debug and fix it; do NOT create the
    artifact by hand.
+5. **Write the run's arguments down once.** The prepare phase records an
+   `invocation` object in `_report/state.json`; phases 1 and 2 read it
+   (`--from-state`) rather than having you re-type the flags. Re-typing them is how
+   a run ends up with two self-consistent artifacts that are both wrong about what
+   the customer asked for.
 
 ## Arguments
 
@@ -60,6 +65,13 @@ line:
   Say it needs confirming.
 - **Never edit `vendor/`** to change an outcome. It is a stamped verbatim copy; see
   `vendor/PROVENANCE.md` before touching it.
+- **Never bypass a reconciliation failure.** If `generate_report.py` refuses because
+  the draft would not describe the same case as `case_state.json`, re-run the extract
+  phase. Do NOT pass `--no-reconcile` to get past it and do NOT write the draft by
+  hand — the refusal is the safety net doing its job.
+- **Never treat a missing artifact as equivalent to a stale one.** The scripts delete
+  a previous run's artifacts before doing anything that can fail, on purpose: no
+  artifact is an honest error, a leftover one is a silent wrong answer.
 
 ## Deliverables
 
@@ -67,7 +79,7 @@ line:
 |---|---|
 | `_report/case_state.json` | **The email attachment.** The machine contract: fields with statuses and evidence, open items with codes/priorities/routes, request class, routing, knowledge provenance. Conforms to `schemas/case_state.schema.json`. |
 | `_report/bom_draft.md` | Readable draft: BOM table, harness-held checkpoints, operator questions, open items. A **lossy** view of the CaseState — cite the JSON as authoritative. |
-| `_report/state.json` | Run state for resumability. Not a deliverable. |
+| `_report/state.json` | The run's `invocation` record (written by prepare, read by both later phases) plus the extract result. Not a deliverable. |
 
 ## Reference material
 

@@ -118,11 +118,14 @@ recommendation; `_report/bom_draft.md`.
   ever produced. Stock and pricing questions are acknowledged and routed to a
   human. Do not present the output as a quote.
 - **One email per run.** Point it at a single RFQ; run it again for the next one.
-- **Large threads are slow.** Runtime grows superlinearly past roughly 100 KB of
-  input: ~0.1 s at 8 KB, ~5 s at 134 KB, ~80 s at 538 KB. A long quoted HTML
-  thread can get there. The wrapper warns on stderr above 100 KB but does not
-  refuse — the cost is inherited from the engine, and truncating input would be
-  worse than being slow. Trim quoted history if you need speed.
+- **Large threads are slow, and a run costs three engine passes.** A single pass
+  is ~0.1 s at 8 KB, ~5 s at 134 KB, ~80 s at 538 KB — superlinear past roughly
+  100 KB. A full kit run makes **three** passes (one in `extract_case`; two in
+  `generate_report`, which re-derives the CaseState to reconcile before
+  rendering), so budget roughly **3x** those figures: ~4 minutes end to end at
+  538 KB, not 80 s. Both scripts warn on stderr above 100 KB. The per-pass cost is
+  inherited from the engine and truncating input would be worse than being slow,
+  so trim quoted history if you need speed.
 - **Two schema values the engine cannot emit.** `schemas/case_state.schema.json`
   declares `status: "superseded"` and `knowledge.lookups[].op: "ratings_for"`, and
   neither is reachable: supersede results appear as a top-level `supersedes` array

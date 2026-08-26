@@ -45,8 +45,12 @@ python3 scripts/run_engine.py --in rfq.eml --out _report/case_state.json --state
 python3 generate_report.py --out _report/bom_draft.md --state _report/state.json
 ```
 
-The second command needs no flags: phase 1 records the whole invocation in
-`_report/state.json` and phase 2 replays it.
+The second command needs no flags: the invocation is recorded in
+`_report/state.json` and phase 2 replays it. Before writing, it re-derives the
+CaseState and refuses if the draft would not describe the same case — so the two
+artifacts can never quietly disagree. Under Astro's recipe both phases read the
+invocation the prepare phase recorded (`--from-state`), so the arguments are
+written down exactly once per run.
 
 See `EXAMPLES.md` for the full argument reference and worked examples.
 

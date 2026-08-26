@@ -42,6 +42,11 @@ file and the contract disagree, the contract wins.
 
 ## Testing
 
+- Two harnesses, and they cover different things. `tools/parity_check.py` proves
+  OUTPUT parity with the source; `tools/selftest.py` proves the DEFENCES still work
+  (exit codes, which artifacts survive a failure, whether the two artifacts agree).
+  Parity cannot see a failure path — round 26 removed two defences and parity stayed
+  green. Both must pass.
 - Framework: `tools/parity_check.py` against `tools/parity/parity.json` — the
   golden-fixture parity harness. `python3 tools/parity_check.py --manifest
   tools/parity/parity.json` must exit 0 before any change is considered done.
@@ -84,4 +89,19 @@ file and the contract disagree, the contract wins.
   cannot check is consistency you do not have.
 - **Never let a failure leave a plausible artifact behind.** Clear stale outputs before
   work that can fail. A missing file is an honest error; a stale valid-looking one is
-  a silent wrong answer.
+  a silent wrong answer. Clear them via `run_state.ARTIFACTS` — never by naming files
+  at the call site, which is how round 26's R26-F1 happened.
+- **Declare categories, not instances.** Artifacts, invocation keys and argv live in
+  `run_state.py` as single declarations. When a review names one broken item, fix the
+  category it belongs to and check every sibling — five of this project's findings
+  across rounds 21–26 were the same shape: the named instance fixed, the sibling
+  missed.
+- **Never enumerate exception types at a boundary you do not own.** `cli.main` can
+  raise `SystemExit` from its own argparse; round 26's R26-F2 was an enumeration that
+  missed it and leaked the engine's success code. Catch broadly, and clamp the exit
+  code so a failure cannot look like a success.
+- **Guards fail CLOSED.** If a safety check cannot run — the thing it compares against
+  is missing, unreadable, not a regular file — that is an error, not a skip. Opting
+  out must be explicit and must say so on stderr.
+- **A failure must not destroy inputs.** Invalidate results, never the record of what
+  was asked for.
