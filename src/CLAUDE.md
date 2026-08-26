@@ -1,4 +1,4 @@
-# email-to-bom — Kit Instructions
+# McGill Email to BOM — Kit Instructions
 
 Read an inbound customer RFQ email and produce a deterministic CaseState plus a
 draft bill of materials, with every missing, ambiguous or unsafe item raised as an

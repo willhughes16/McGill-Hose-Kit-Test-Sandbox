@@ -1,6 +1,6 @@
 {
   "name": "email-to-bom",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Read an inbound customer RFQ email and produce a deterministic CaseState plus a draft bill of materials, with every missing, ambiguous or unsafe item raised as an explicit open item. Drafts only - a human reviews and commits in the ERP.",
   "author": "ScaleUp Labs",
   "contents": [
@@ -26,7 +26,7 @@
     "vendor/email_to_bom/validators.py"
   ],
   "download_url": "https://TODO.example/email-to-bom/dist/kit.zip",
-  "sha256": "8471b31573329d6317de0983f8ca99fb82439ec952c2ab7423a3dca04160d7f2",
+  "sha256": "8ed00871536c7b55b18d1401ba9ada500caab67ed10fbe97a48f2b06f10c238c",
   "manifest_version": 4,
   "contract_version": "^1.0.0",
   "requires": {

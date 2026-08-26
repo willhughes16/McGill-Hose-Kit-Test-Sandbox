@@ -1,4 +1,4 @@
-# email-to-bom
+# McGill Email to BOM
 
 Turn an inbound customer RFQ email into a deterministic **CaseState** and a **draft
 bill of materials**, with every missing, ambiguous or unsafe item raised as an
