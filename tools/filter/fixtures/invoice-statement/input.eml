@@ -1,0 +1,7 @@
+From: ar@customer.example
+To: ap@mcgill.example
+Subject: Invoice 10482 / statement of account
+Content-Type: text/plain; charset=utf-8
+
+Please find invoice 10482 attached. Amount due 1,842.55 USD, terms net 30.
+Statement of account for July is included. Remit to the address on the invoice.
