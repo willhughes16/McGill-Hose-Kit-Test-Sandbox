@@ -155,6 +155,30 @@ fix pass then reproduced the same failure class twice. The lesson is now explici
   counts wrong in both directions — 7 fixtures over 4 distinct inputs, not "six
   fixtures, five distinct inputs").
 
+### Phase 5 — Input Filter (goal)
+
+Decide, before the engine is invoked at all, whether an inbound message is a
+quoting request worth drafting a BOM for — and route everything else without
+producing a draft.
+
+The engine already classifies in-scope requests six ways, including
+`out_of_scope`, so this is NOT a new classification of RFQs. It is a pre-filter on
+the mailbox: auto-replies and vacation notices, delivery-status notifications,
+newsletters and marketing, bare acknowledgements ("thanks, got it"), invoices and
+statements, and internal chatter. Today the kit drafts for any input, so a
+newsletter produces a draft BOM full of open items and an operator has to read it
+to discover there was never a request.
+
+Hard constraints inherited from the kit:
+- The engine stays vendored verbatim; a filter must not alter, truncate or
+  normalise the bytes the engine receives, or output parity with the source
+  breaks. The filter decides WHETHER to run the engine, never WHAT it sees.
+- Filtering out a real RFQ is far worse than passing a newsletter through. The
+  kit's whole design line is "better to ask than to be quietly wrong", so the
+  filter must fail toward invoking the engine and must never silently discard.
+- Every filtered message needs a machine-readable reason and a route, consistent
+  with how `open_items` already carry codes and routes.
+
 ## Constraints
 
 - **Never edit `src/vendor/`** to change an outcome. It is a stamped verbatim copy;
@@ -218,6 +242,14 @@ quietly treated as complete.
 - `src/vendor/config/catalog_candidates.json` ships but is never loaded by the
   engine (the source documents this). Harmless dead weight kept for verbatim
   fidelity.
+- **FOLLOW-UP-10 — the kit's own validator cannot check its schemas** (round-25/26
+  shape, surfaced by the phase-5 verifier). `tools/_schema_engine.py` raises on the
+  `"type": ["string","null"]` unions in `src/schemas/filter_decision.schema.json`, and
+  already could not validate `case_state.schema.json` ("additionalProperties subschema
+  at path fields"). So both output contracts are documented but not machine-checkable
+  by the kit's own tooling — the enums are enforced only by `tools/selftest.py`
+  asserting real records against them. Pre-existing, not introduced by phase 5, and
+  worth fixing before a third schema is added.
 - **FOLLOW-UP-8 — two unreachable schema values, fix belongs upstream** (round 25,
   F-5). `schemas/case_state.schema.json` declares `status: "superseded"` and
   `knowledge.lookups[].op: "ratings_for"`; the engine can emit neither. The schema is

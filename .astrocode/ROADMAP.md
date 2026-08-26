@@ -6,3 +6,4 @@
 - [ ] Phase 2 — Broaden the parity corpus `pending`
 - [ ] Phase 3 — Vendor-refresh guard `pending`
 - [ ] Phase 4 — Publish to hosted Astro `pending`
+- [ ] Phase 5 — Input Filter `verified`

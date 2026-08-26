@@ -25,6 +25,12 @@
       "name": "Publish to hosted Astro",
       "slug": "04-publish-to-hosted-astro",
       "status": "pending"
+    },
+    {
+      "number": 5,
+      "name": "Input Filter",
+      "slug": "05-input-filter",
+      "status": "verified"
     }
   ]
 }
