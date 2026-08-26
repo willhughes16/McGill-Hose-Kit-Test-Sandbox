@@ -17,18 +17,25 @@ Exit 0 = every defence held. Exit 1 = a defence is gone.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RUN = os.path.join(ROOT, "src", "scripts", "run_engine.py")
 GEN = os.path.join(ROOT, "src", "generate_report.py")
+GATE = os.path.join(ROOT, "src", "scripts", "filter_gate.py")
 FIX = os.path.join(ROOT, "tools", "parity", "fixtures")
+FILTFIX = os.path.join(ROOT, "tools", "filter", "fixtures")
 IDS = ["OPW 633C A", "OPW 633E A", "SPS400452", "HOS-064 300 EPDM"]
+JUNK = ["auto-reply", "delivery-status", "newsletter", "bare-ack",
+        "invoice-statement", "internal-chatter"]
+ADVERSARIAL = ["bait-rfq", "ack-plus-rfq", "invoice-plus-rfq", "broken-mime"]
 
 results = []
 
@@ -82,6 +89,24 @@ def case_and_draft_agree(d):
                    for l in draft.splitlines() if l.startswith("  - ["))
     return (len(rows) == len(cs["lines"])
             and codes == sorted(i["code"] for i in cs["open_items"]))
+
+
+def filter_workdir(*inputs):
+    """workdir()'s sibling for tools/filter/fixtures (phase 05)."""
+    d = tempfile.mkdtemp()
+    os.makedirs(os.path.join(d, "_report"), exist_ok=True)
+    for name, src in inputs:
+        shutil.copy(os.path.join(FILTFIX, src, "input.eml"), os.path.join(d, name))
+    return d
+
+
+def gate(d, inp, *extra):
+    return sh([GATE, "--in", inp, "--state", "_report/state.json", *extra], d)
+
+
+def sha256(path):
+    with open(path, "rb") as fh:
+        return hashlib.sha256(fh.read()).hexdigest()
 
 
 print("Defence 1 — flags survive the phase boundary (round 25 F-1)")
@@ -238,6 +263,200 @@ bad = [
 for label, args in bad:
     rc, _, _ = sh(args, d)
     check(f"{label} → exit {rc}", rc in (0, 1), f"exit={rc}")
+shutil.rmtree(d)
+
+print("Defence 5a — every junk category is filtered, and filtering leaves no "
+      "artifact behind (phase 05, C1/C2)")
+codes_seen = {}
+for name in JUNK:
+    d = filter_workdir(("in.eml", name))
+    rc, out, err = gate(d, "in.eml")
+    check(f"{name} → gate exits 3 (filtered)", rc == 3, f"exit={rc} {err.strip()[:100]}")
+    check(f"{name} → no case_state.json/bom_draft.md in _report",
+          not (os.path.isfile(os.path.join(d, "_report", "case_state.json"))
+               or os.path.isfile(os.path.join(d, "_report", "bom_draft.md"))))
+    try:
+        decision = json.loads(out)
+    except json.JSONDecodeError:
+        decision = {}
+    check(f"{name} → non-empty machine-readable code", bool(decision.get("code")),
+          f"code={decision.get('code')!r}")
+    check(f"{name} → route drawn from the declared vocabulary", bool(decision.get("route")),
+          f"route={decision.get('route')!r}")
+    codes_seen[name] = decision.get("code")
+    shutil.rmtree(d)
+
+print("Defence 5b — the six junk categories report DISTINCT codes, and re-running "
+      "the gate on the same input is deterministic (C2)")
+check("at least four distinct codes across the six junk categories",
+      len(set(codes_seen.values())) >= 4, f"codes={codes_seen}")
+d = filter_workdir(("in.eml", "newsletter"))
+rc1, out1, _ = gate(d, "in.eml")
+rc2, out2, _ = gate(d, "in.eml")
+check("the same message re-run twice yields an identical filter record",
+      rc1 == rc2 == 3 and out1 == out2)
+shutil.rmtree(d)
+
+print("Defence 5c — ambiguous and adversarial messages are NEVER filtered "
+      "(C5, ADR-001's fail-open inversion)")
+for name in ADVERSARIAL:
+    d = filter_workdir(("in.eml", name))
+    rc, _, err = gate(d, "in.eml")
+    check(f"{name} → gate exits 0 (not filtered)", rc == 0, f"exit={rc} {err.strip()[:100]}")
+    rc2, _, err2 = sh([RUN, "--in", "in.eml", "--state", "_report/state.json"], d)
+    check(f"{name} → the normal path still produces a CaseState",
+          rc2 == 0 and os.path.isfile(os.path.join(d, "_report", "case_state.json")),
+          err2.strip()[:100])
+    shutil.rmtree(d)
+d = filter_workdir(("in.eml", "empty"))
+rc, out, err = gate(d, "in.eml")
+try:
+    empty_filtered = json.loads(out).get("filtered")
+except json.JSONDecodeError:
+    empty_filtered = None
+check("a zero-byte input is never a quiet, success-looking 'filtered'",
+      rc == 1 or (rc == 0 and empty_filtered is False),
+      f"exit={rc} out={out.strip()[:120]} err={err.strip()[:120]}")
+shutil.rmtree(d)
+
+print("Defence 5d — filtered / drafted / broken are three DISTINCT exit codes, "
+      "and the gate never returns the engine's 2 (C2, REQ-007)")
+d = filter_workdir(("junk.eml", "newsletter"))
+rc_filtered, _, _ = gate(d, "junk.eml")
+check("a filtered run exits 3", rc_filtered == 3)
+shutil.rmtree(d)
+d = filter_workdir(("rfq.eml", "bait-rfq"))
+rc_pass, _, _ = gate(d, "rfq.eml")
+rc_drafted, _, _ = sh([RUN, "--in", "rfq.eml", "--state", "_report/state.json"], d)
+check("a real RFQ passes the gate and then drafts, exiting 0",
+      rc_pass == 0 and rc_drafted == 0)
+shutil.rmtree(d)
+d = filter_workdir(("placeholder.eml", "newsletter"))
+rc_broken, _, _ = gate(d, "missing.eml")
+check("a nonexistent input is the gate's own failure, exit 1", rc_broken == 1)
+check("none of the three outcomes is ever the engine's 2",
+      2 not in (rc_filtered, rc_pass, rc_drafted, rc_broken))
+shutil.rmtree(d)
+
+print("Defence 5e — a filtered run in the SAME directory clears the previous "
+      "customer's paperwork (C1, the R26-F1 category)")
+d = tempfile.mkdtemp()
+os.makedirs(os.path.join(d, "_report"), exist_ok=True)
+shutil.copy(os.path.join(FIX, "plain-steam", "input.eml"), os.path.join(d, "rfq.eml"))
+shutil.copy(os.path.join(FILTFIX, "newsletter", "input.eml"), os.path.join(d, "junk.eml"))
+phase1(d, "rfq.eml")
+phase2(d)
+before = artifacts(d)
+check("a real RFQ drafts before the filtered run",
+      "bom_draft.md" in before and "case_state.json" in before, f"before={before}")
+rc, _, _ = gate(d, "junk.eml")
+check("the newsletter that follows it is filtered", rc == 3)
+after = artifacts(d)
+check("both of the previous run's artifacts are gone",
+      "bom_draft.md" not in after and "case_state.json" not in after,
+      f"before={before} after={after}")
+with open(os.path.join(d, "_report", "state.json"), encoding="utf-8") as fh:
+    state = json.load(fh)
+check("the filter record for the newsletter is present",
+      state.get("filter", {}).get("filtered") is True, f"state={state}")
+shutil.rmtree(d)
+
+print("Defence 5f — a successful extract clears a stale filter record, the "
+      "sibling of R26-F1's stale-draft defence (t7)")
+d = tempfile.mkdtemp()
+os.makedirs(os.path.join(d, "_report"), exist_ok=True)
+shutil.copy(os.path.join(FILTFIX, "newsletter", "input.eml"), os.path.join(d, "junk.eml"))
+shutil.copy(os.path.join(FIX, "plain-steam", "input.eml"), os.path.join(d, "rfq.eml"))
+gate(d, "junk.eml")
+with open(os.path.join(d, "_report", "state.json"), encoding="utf-8") as fh:
+    check("the filter record was written", "filter" in json.load(fh))
+phase1(d, "rfq.eml")
+with open(os.path.join(d, "_report", "state.json"), encoding="utf-8") as fh:
+    check("a successful extract drops the stale filter record",
+          "filter" not in json.load(fh))
+shutil.rmtree(d)
+
+print("Defence 5g — the gated path is byte-identical to the ungated parity "
+      "capture, so parity stays blind to the gate (C4)")
+d = tempfile.mkdtemp()
+os.makedirs(os.path.join(d, "_report"), exist_ok=True)
+src = os.path.join(FIX, "plain-steam", "input.eml")
+shutil.copy(src, os.path.join(d, "rfq.eml"))
+before_sha = sha256(src)
+rc, _, err = gate(d, "rfq.eml")
+check("plain-steam passes the gate", rc == 0, err.strip()[:120])
+rc, _, err = phase1(d, "rfq.eml")
+check("plain-steam still reaches the engine", rc == 0, err.strip()[:120])
+try:
+    with open(os.path.join(d, "_report", "case_state.json"), "rb") as fh:
+        got = fh.read()
+    with open(os.path.join(FIX, "plain-steam", "expected_output.json"), "rb") as fh:
+        expected = fh.read()
+    identical = got == expected
+except OSError:
+    identical = False
+check("the gated CaseState is byte-identical to the source-captured expected_output.json",
+      identical)
+check("the source input file's bytes are unchanged", sha256(src) == before_sha)
+shutil.rmtree(d)
+
+print("Defence 5h — --no-filter processes a filtered message with no edit to "
+      "the kit or the email (C6)")
+d = filter_workdir(("junk.eml", "newsletter"))
+src = os.path.join(d, "junk.eml")
+before_sha = sha256(src)
+rc, _, err = gate(d, "junk.eml", "--no-filter")
+check("--no-filter forces the gate to pass through", rc == 0, err.strip()[:120])
+rc, _, err = phase1(d, "junk.eml")
+check("the overridden message reaches the engine", rc == 0, err.strip()[:120])
+phase2(d)
+check("a CaseState and draft exist despite the message's filter category",
+      "case_state.json" in artifacts(d) and "bom_draft.md" in artifacts(d),
+      f"artifacts={artifacts(d)}")
+check("--no-filter did not touch the input file's bytes", sha256(src) == before_sha)
+shutil.rmtree(d)
+
+print("Defence 5i — the decision schema's code/route enums match the declared "
+      "category vocabulary exactly (mechanical drift check)")
+try:
+    with open(os.path.join(ROOT, "src", "reference", "filter_signals.json"),
+              encoding="utf-8") as fh:
+        signals = json.load(fh)
+    with open(os.path.join(ROOT, "src", "schemas", "filter_decision.schema.json"),
+              encoding="utf-8") as fh:
+        schema = json.load(fh)
+    declared_codes = {c["code"] for c in signals["categories"]} | {None}
+    declared_routes = {c["route"] for c in signals["categories"]} | {None}
+    schema_codes = set(schema["properties"]["code"]["enum"])
+    schema_routes = set(schema["properties"]["route"]["enum"])
+    check("schema `code` enum equals the t1 category codes plus null",
+          declared_codes == schema_codes,
+          f"signals={declared_codes} schema={schema_codes}")
+    check("schema `route` enum equals the t1 category routes plus null",
+          declared_routes == schema_routes,
+          f"signals={declared_routes} schema={schema_routes}")
+except (KeyError, OSError, json.JSONDecodeError) as e:
+    check("vocabulary consistency check could run", False, f"{type(e).__name__}: {e}")
+
+print("Defence 5j — a ~1 MB junk message filters in well under the engine's "
+      "superlinear cost at that size, with no engine invocation (C3)")
+d = filter_workdir(("in.eml", "newsletter"))
+big_path = os.path.join(d, "in.eml")
+with open(big_path, "rb") as fh:
+    raw = fh.read()
+head, _, body = raw.partition(b"\n\n")
+filler = (b"Save 20% on hose reels, EPDM suction hose and stainless fittings "
+          b"all month.\n" * 15000)
+with open(big_path, "wb") as fh:
+    fh.write(head + b"\n\n" + body + b"\n" + filler)
+check("the generated fixture is around 1 MB", os.path.getsize(big_path) > 900_000,
+      f"size={os.path.getsize(big_path)}")
+t0 = time.time()
+rc, _, err = gate(d, "in.eml")
+elapsed = time.time() - t0
+check("the ~1 MB newsletter still filters", rc == 3, err.strip()[:120])
+check("filtering finishes in a couple of seconds, not engine-scale minutes",
+      elapsed < 10, f"elapsed={elapsed:.2f}s")
 shutil.rmtree(d)
 
 failed = [r for r in results if not r[1]]
