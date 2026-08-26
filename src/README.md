@@ -27,11 +27,26 @@ or re-asking.
 
 ## Usage
 
+As an Astro kit, you ask Astro for it and pass the RFQ plus any flags as the
+kit's arguments — Astro executes `recipes/mcgill-email-to-bom.yaml`:
+
 ```
-email-to-bom rfq.eml
-email-to-bom rfq.eml --component-ids "OPW 633C A" "SPS400452"
-email-to-bom rfq.eml --coc
+rfq.eml
+rfq.eml --component-ids "OPW 633C A" "SPS400452"
+rfq.eml --coc
+rfq.eml --config-dir /path/to/erp-backed-config
 ```
+
+To run it directly instead, the kit ships no console script — invoke the two
+phase scripts with `python3` (no install, no dependencies):
+
+```
+python3 scripts/run_engine.py --in rfq.eml --out _report/case_state.json --state _report/state.json
+python3 generate_report.py --out _report/bom_draft.md --state _report/state.json
+```
+
+The second command needs no flags: phase 1 records the whole invocation in
+`_report/state.json` and phase 2 replays it.
 
 See `EXAMPLES.md` for the full argument reference and worked examples.
 
@@ -54,7 +69,7 @@ quietly wrong.**
 
 | Path | Role |
 |---|---|
-| `recipes/email-to-bom.yaml` | The execution contract: `prepare` → `extract_case` → `generate_report`. |
+| `recipes/mcgill-email-to-bom.yaml` | The execution contract: `prepare` → `extract_case` → `generate_report`. |
 | `scripts/run_engine.py` | Thin wrapper: runs the vendored engine, writes the CaseState verbatim. |
 | `generate_report.py` | Thin wrapper: writes the human-readable draft verbatim. |
 | `schemas/case_state.schema.json` | The CaseState contract, including the full open-item code vocabulary. |

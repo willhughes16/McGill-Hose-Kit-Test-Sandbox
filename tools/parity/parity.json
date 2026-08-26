@@ -1,13 +1,15 @@
 {
   "_provenance": {
     "source_repo": "ScaleUpLabs/McGill-Core (private; formerly TWYD-Factory-McGill)",
-    "source_commit": "b1f99502adce489f1bd37eddecfbb921a4a4d1f6",
+    "source_commit": "b15b23d64f0fe0ceed934a1914306ddb9391b464",
     "source_version": "2.0.0",
-    "captured_at": "2026-08-26T14:07:52Z",
-    "capture_command": "python -m email_to_bom.cli --json <input>  (run from the source repo root, its own .venv, Python 3.14.6)",
+    "captured_at": "2026-08-26T16:05:00Z",
+    "capture_command": "python -m email_to_bom.cli [--json] [--component-ids ...] <input>  (run from the source repo root, its own .venv, Python 3.14.6)",
     "runtime_deps_at_capture": "none - the source declares dependencies = [] and is stdlib-only; pytest>=7.0 is dev-only and not needed to run the engine",
     "normalization": "NONE. Every fixture declares an empty normalize block. The engine has no clock, no randomness, no run-ids and emits no absolute paths on the CLI path; byte-identical output was confirmed across repeated runs and across PYTHONHASHSEED values. Nothing is masked, so parity cannot be silently loosened.",
-    "fixture_inputs": "plain-steam / quoted-printable / multipart-html are the source's own test fixtures, copied verbatim (already anonymised: .example domains, 'Acme Dairy'). suction-assembly / confirmed-ids / human-render derive from the source's examples/sample_rfq.eml with the IDENTITY LINES ANONYMISED (real sender name, address and end-customer replaced); the technical content is unchanged, and the expected outputs were captured from the source engine running on these anonymised inputs, so parity remains a real capture."
+    "fixture_inputs": "plain-steam / quoted-printable / multipart-html are the source's own test fixtures, copied verbatim (already anonymised: .example domains, 'Acme Dairy'). suction-assembly / confirmed-ids / human-render derive from the source's examples/sample_rfq.eml with the IDENTITY LINES ANONYMISED (real sender name, address and end-customer replaced); the technical content is unchanged, and the expected outputs were captured from the source engine running on these anonymised inputs, so parity remains a real capture.",
+    "round_25_changes": "Fixture inputs moved to the RFC 2606 reserved .example TLD (round 25, F-7) and the affected expected outputs were re-captured from the source engine. Added the confirmed-ids-render fixture: the FLAGGED render path, which is the one combination no fixture covered and where round 25 found F-1 (flags dropped between phases, so the human draft contradicted the CaseState).",
+    "source_commit_note": "All 7 expected outputs re-captured at this single commit in round 25. b15b23d changed only tests/property/shape_matrix.py, so the engine content is identical to b1f9950, which src/vendor/PROVENANCE.md stamps as the vendoring commit."
   },
   "fixtures": [
     {
@@ -57,10 +59,20 @@
     },
     {
       "name": "human-render",
-      "command": "python3 src/generate_report.py --in {input} --out tools/parity/fixtures/human-render/actual_render.txt --state /dev/null && python3 tools/parity/wrap_text.py tools/parity/fixtures/human-render/actual_render.txt {output}",
+      "command": "python3 src/generate_report.py --in {input} --state /dev/null --case-state /dev/null --out tools/parity/fixtures/human-render/actual_render.txt && python3 tools/parity/wrap_text.py tools/parity/fixtures/human-render/actual_render.txt {output}",
       "input": "tools/parity/fixtures/human-render/input.eml",
       "output": "tools/parity/fixtures/human-render/actual_output.json",
       "expected_output": "tools/parity/fixtures/human-render/expected_output.json",
+      "timeout": 60,
+      "normalize": {}
+    },
+    {
+      "name": "confirmed-ids-render",
+      "_why": "Round 25 F-1 regression guard: runs the FULL two-phase path with flags \u2014 run_engine.py records the invocation, generate_report.py replays it from state.json. Before the fix this produced an empty BOM table and a phantom SELECTION_UNRESOLVED. Expected output captured from the source engine WITH the same flags.",
+      "command": "python3 src/scripts/run_engine.py --in {input} --out tools/parity/fixtures/confirmed-ids-render/case_state.json --state tools/parity/fixtures/confirmed-ids-render/state.json --component-ids \"OPW 633C A\" \"OPW 633E A\" \"SPS400452\" \"HOS-064 300 EPDM\" && python3 src/generate_report.py --state tools/parity/fixtures/confirmed-ids-render/state.json --out tools/parity/fixtures/confirmed-ids-render/actual_render.txt && python3 tools/parity/wrap_text.py tools/parity/fixtures/confirmed-ids-render/actual_render.txt {output}",
+      "input": "tools/parity/fixtures/confirmed-ids-render/input.eml",
+      "output": "tools/parity/fixtures/confirmed-ids-render/actual_output.json",
+      "expected_output": "tools/parity/fixtures/confirmed-ids-render/expected_output.json",
       "timeout": 60,
       "normalize": {}
     }

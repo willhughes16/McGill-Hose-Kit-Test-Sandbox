@@ -1,4 +1,4 @@
-# Conventions — email-to-bom
+# Conventions — mcgill-email-to-bom
 
 > The rules new code MUST follow. Keep this short and current — every planning and
 > execution agent reads it before touching code. Vague canon = inconsistent code.
@@ -19,7 +19,7 @@ file and the contract disagree, the contract wins.
 ## Naming
 
 - Files / modules: `snake_case.py`. Recipe phases are `snake_case`. The recipe file
-  is named after the kit id: `src/recipes/email-to-bom.yaml`.
+  is named after the kit id: `src/recipes/mcgill-email-to-bom.yaml`.
 - Functions / variables: `snake_case`; module-private helpers prefixed `_`.
 - Tests: fixture directories are `kebab-case` under
   `tools/parity/fixtures/<case>/`, each holding `input.eml`,
@@ -71,3 +71,17 @@ file and the contract disagree, the contract wins.
 - Wrappers call the vendored engine's own entry point. **Never re-express an engine
   rule in kit code** — a second copy of a rule is the drift this project exists to
   avoid.
+- **The engine invocation is ONE contract in ONE place.** Any script that invokes the
+  engine builds its argv through `run_engine.build_argv` and, if it runs across a
+  phase boundary, replays the invocation recorded in `state.json`. Never re-list the
+  flags at a second call site. Round 25's F-1 was exactly this: phase 2 rebuilt the
+  call and silently dropped half of it, so the human draft contradicted the machine
+  contract. Adding an argument means adding it to the recorded invocation, not to a
+  command string.
+- **A derived artifact must be reconcilable against its source artifact.** If a script
+  produces something downstream of the CaseState, it must be able to prove they
+  describe the same case, and must FAIL rather than emit a mismatch. Consistency you
+  cannot check is consistency you do not have.
+- **Never let a failure leave a plausible artifact behind.** Clear stale outputs before
+  work that can fail. A missing file is an honest error; a stale valid-looking one is
+  a silent wrong answer.

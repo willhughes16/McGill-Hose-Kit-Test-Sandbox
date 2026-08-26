@@ -18,7 +18,7 @@ The final deliverable is `_report/case_state.json`, the integration contract, wi
 
 ## How to run
 
-1. Read `recipes/email-to-bom.yaml` — it is the execution contract. Execute its
+1. Read `recipes/mcgill-email-to-bom.yaml` — it is the execution contract. Execute its
    phases **in order**; each phase's `goal`, `constraints`, `input`, and `output`
    are binding.
 2. Stay in the current working directory. All runtime output goes under

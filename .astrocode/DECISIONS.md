@@ -1,4 +1,4 @@
-# Decisions — email-to-bom
+# Decisions — mcgill-email-to-bom
 
 > Append-only ADR-lite log. Each entry: what we decided, why, and what we rejected.
 > Add entries with `ac decision add "<title>" --why "…" --rejected "…"` or

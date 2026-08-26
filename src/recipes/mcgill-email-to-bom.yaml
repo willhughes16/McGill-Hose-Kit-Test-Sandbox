@@ -1,4 +1,4 @@
-name: email-to-bom
+name: mcgill-email-to-bom
 description: >
   Read an inbound customer RFQ email and produce a deterministic CaseState plus a
   draft bill of materials, with every missing, ambiguous or unsafe item raised as an
@@ -17,8 +17,11 @@ phases:
 
       Step 1 — Parse $ARGUMENTS. Required: the path to ONE RFQ email
       (`.eml` or `.txt`). Optional: `--component-ids A B ...` for Component IDs
-      an operator has already confirmed, and `--coc` when the customer requires
-      a Certificate of Conformance. If no RFQ path is given, print usage and STOP.
+      an operator has already confirmed, `--coc` when the customer requires a
+      Certificate of Conformance, and `--config-dir DIR` to use an alternate
+      rules/catalog directory (e.g. one backed by the ERP item master — this is
+      the supported route to grounded selection). If no RFQ path is given, print
+      usage and STOP.
 
       Step 2 — Verify the file exists and is readable. If not, print the path
       you tried and STOP — do NOT guess at another file, and do NOT invent
@@ -45,7 +48,10 @@ phases:
 
       Use: python3 scripts/run_engine.py --in <RFQ path>
            --out _report/case_state.json --state _report/state.json
-      Pass through --component-ids / --coc exactly as given in phase 0.
+      Pass through --component-ids / --coc / --config-dir exactly as given in
+      phase 0. The script records the COMPLETE invocation in state.json, which
+      is how phase 2 reproduces the identical engine call — you do not repeat
+      the flags there.
 
       The script wraps the vendored deterministic engine and writes its output
       verbatim. Read the summary it prints, then STOP and read
@@ -92,6 +98,12 @@ phases:
       Use: python3 generate_report.py --out _report/bom_draft.md
            --state _report/state.json
 
+      It replays the invocation recorded in phase 1 (every flag, not just the
+      input path) and, before writing, re-derives the CaseState and checks it
+      equals _report/case_state.json. If they disagree it exits 1 rather than
+      emit a draft describing a different case. If that happens, do NOT
+      hand-write the draft and do NOT ignore it — re-run phase 1.
+
       Output: _report/bom_draft.md — the draft BOM table, the harness-held
       checkpoints, the operator questions and the open items, exactly as the
       engine renders them.
@@ -109,6 +121,7 @@ phases:
     constraints:
       - "ALWAYS use the script — NEVER generate the deliverable by hand"
       - "If the script fails, debug and fix it — do NOT create the artifact manually"
+      - "A reconciliation failure means the draft would contradict the CaseState — re-run phase 1, never bypass it"
       - "NEVER present the draft as a quote, a confirmed BOM, or a committed order"
       - "NEVER state a price, a lead time or a stock position the engine did not produce"
       - "Report every open item — do NOT summarise them away or judge them minor"

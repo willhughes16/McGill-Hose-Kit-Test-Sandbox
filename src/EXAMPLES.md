@@ -1,13 +1,22 @@
-# email-to-bom — Examples
+# mcgill-email-to-bom — Examples
 
 ## Quick Start
 
+Ask Astro for the kit with the RFQ as its argument:
+
 ```
-email-to-bom rfq.eml
+rfq.eml
 ```
 
 Reads one RFQ email and produces `_report/case_state.json` (the machine contract,
 attached to email replies) plus `_report/bom_draft.md` (the readable draft).
+
+Directly, without Astro (the kit ships no console script):
+
+```
+python3 scripts/run_engine.py --in rfq.eml --out _report/case_state.json --state _report/state.json
+python3 generate_report.py --out _report/bom_draft.md --state _report/state.json
+```
 
 ## Examples
 
@@ -109,6 +118,18 @@ recommendation; `_report/bom_draft.md`.
   ever produced. Stock and pricing questions are acknowledged and routed to a
   human. Do not present the output as a quote.
 - **One email per run.** Point it at a single RFQ; run it again for the next one.
+- **Large threads are slow.** Runtime grows superlinearly past roughly 100 KB of
+  input: ~0.1 s at 8 KB, ~5 s at 134 KB, ~80 s at 538 KB. A long quoted HTML
+  thread can get there. The wrapper warns on stderr above 100 KB but does not
+  refuse — the cost is inherited from the engine, and truncating input would be
+  worse than being slow. Trim quoted history if you need speed.
+- **Two schema values the engine cannot emit.** `schemas/case_state.schema.json`
+  declares `status: "superseded"` and `knowledge.lookups[].op: "ratings_for"`, and
+  neither is reachable: supersede results appear as a top-level `supersedes` array
+  plus `superseded_from` inside the field, and `ratings_for()` records the
+  `resolve_component` op. Do not build a branch for either. The schema is kept
+  byte-identical to the source's contract rather than corrected here, so the fix
+  belongs upstream.
 - **Multi-kit workflows:** feed `case_state.json` to a conversation layer to run
   the customer dialogue (it is designed for exactly that — every open item carries
   a priority and a route), and keep the raw JSON with the case record for audit.

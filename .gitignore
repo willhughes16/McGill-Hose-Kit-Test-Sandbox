@@ -15,3 +15,8 @@ __pycache__/
 
 # astro-code: harness-created agent worktrees — never commit these
 .claude/worktrees/
+
+# parity fixture byproducts — regenerated on every run
+tools/parity/fixtures/*/actual_*
+tools/parity/fixtures/*/state.json
+tools/parity/fixtures/*/case_state.json

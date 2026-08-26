@@ -1,4 +1,4 @@
-# email-to-bom
+# mcgill-email-to-bom
 
 ## Vision
 
@@ -55,7 +55,7 @@ silently loosened.
 - REQ-011 `./tools/build_kit.sh` succeeds, producing `dist/kit.zip` root-relative
   with `CLAUDE.md` at the zip root, and filling `sha256` + `contents[]`.
 - REQ-012 `src/EXAMPLES.md` carries all four required sections.
-- REQ-013 The recipe `src/recipes/email-to-bom.yaml` parses as YAML and its phase
+- REQ-013 The recipe `src/recipes/mcgill-email-to-bom.yaml` parses as YAML and its phase
   inputs/outputs are consistent.
 - REQ-014 Every declared artifact is actually produced by the workflow the recipe
   describes; exactly one artifact carries `email_attachment`
@@ -78,6 +78,38 @@ silently loosened.
   BOM lines. Exercises catalog grounding and checkpoint closure.
 - REQ-022 `human-render` — the human-readable draft, compared through the same
   exact comparator (JSON-wrapped). Exercises the renderer, not just the CaseState.
+
+### Round 25 (blind verification) — closed findings, now requirements
+
+Round 25 returned FAIL. The bar was `ACCEPTANCE.md`; the report is
+`VERIFICATION_ROUND25.md`. The headline finding was this project's signature
+failure class landing in the kit itself: one rule in two places, one copy stale.
+
+- REQ-023 The engine invocation is ONE contract in ONE place. `run_engine.py`
+  records the complete invocation (input + every flag) in `state.json`;
+  `generate_report.py` replays it through the SAME `build_argv` helper. Closes F-1
+  (`--component-ids` / `--coc` were dropped between phases, so the human draft
+  showed an empty BOM table and a phantom `SELECTION_UNRESOLVED` the CaseState said
+  was closed) and F-6 (`--config-dir` documented but unreachable from the recipe).
+- REQ-024 The deliverable must reconcile with the contract. Before writing,
+  `generate_report.py` re-derives the CaseState from the replayed invocation and
+  asserts it equals `case_state.json`; on any difference it exits 1 rather than
+  emit a draft describing a different case. This is the structural defence — it
+  catches invocation drift from causes not yet imagined, not just the two flags
+  round 25 found.
+- REQ-025 A failed run leaves no artifact. `run_engine.py` clears the previous
+  `case_state.json` and invalidates `state.json` BEFORE it can fail, so a failed
+  re-run cannot leave a schema-valid artifact describing a different email
+  (F-4). `parity_check.py` makes this guarantee for fixtures; the runtime now
+  makes it too.
+- REQ-026 The flagged render path has a fixture. `confirmed-ids-render` runs the
+  full two-phase path with flags — the one combination no fixture covered, which is
+  exactly where F-1 lived. Mutation-tested: reintroducing F-1 makes it fail.
+- REQ-027 Documented invocations must exist. The `mcgill-email-to-bom rfq.eml` form in
+  README/EXAMPLES named no shipped executable (F-3); both now distinguish the Astro
+  kit invocation from the real `python3` commands.
+- REQ-028 Fixture identities stay in reserved namespaces (F-7): `.example` per RFC
+  2606 throughout, no ordinary `.com` anyone could own.
 
 ## Constraints
 
@@ -139,3 +171,16 @@ quietly treated as complete.
 - `src/vendor/config/catalog_candidates.json` ships but is never loaded by the
   engine (the source documents this). Harmless dead weight kept for verbatim
   fidelity.
+- **FOLLOW-UP-8 — two unreachable schema values, fix belongs upstream** (round 25,
+  F-5). `schemas/case_state.schema.json` declares `status: "superseded"` and
+  `knowledge.lookups[].op: "ratings_for"`; the engine can emit neither. The schema is
+  deliberately NOT corrected here — it is a copy of the source's contract, and editing
+  it in the kit would fork the contract while claiming fidelity, which is the exact
+  drift this project exists to avoid. Documented in EXAMPLES.md so no consumer builds
+  a dead branch; raise it against `ScaleUpLabs/McGill-Core`.
+- **FOLLOW-UP-9 — superlinear runtime on large inputs** (round 25, F-8). ~0.1 s at
+  8 KB, ~5 s at 134 KB, ~80 s at 538 KB, unbounded beyond. Measured as **inherited**:
+  the source engine takes 88.0 s on the same 538 KB input and its output is
+  byte-identical, so parity holds and the cost is the engine's, not the kit's. The kit
+  now warns above 100 KB and states an honest `estimated_duration`; a real fix (or a
+  documented input ceiling) belongs upstream.

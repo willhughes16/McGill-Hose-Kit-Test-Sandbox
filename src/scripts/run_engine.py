@@ -12,6 +12,12 @@ argument handling, ``.eml``/MIME decoding (including the ``[html-source]`` and
 ``[hidden-content-suspected]`` sentinels DD-2 depends on), the questions /
 open_items duality, and the exit-code contract.
 
+It records the COMPLETE invocation in state.json -- input path AND every flag --
+because the deliverable phase re-runs the engine and must reproduce this exact
+call. Round 25 (F-1) found that recording only the input path made the human
+draft silently contradict the CaseState on any flagged run. The invocation is
+one contract; it lives in one place.
+
 Exit codes (the WRAPPER's, not the engine's):
     0  CaseState written
     1  could not read the input, load config, or write the output
@@ -37,25 +43,55 @@ if _VENDOR not in sys.path:
 
 from email_to_bom import cli  # noqa: E402  (needs the sys.path line above)
 
+# Past this input size the engine's runtime grows superlinearly (round 25, F-8).
+# We warn rather than refuse: refusing would change behaviour and break parity
+# with the source, which processes the input regardless.
+_SLOW_INPUT_BYTES = 100 * 1024
 
-def run(email_path, component_ids=None, coc=False, config_dir=None):
-    """Invoke the vendored CLI and return (case_state_json_text, engine_exit)."""
-    argv = [email_path, "--json"]
-    if component_ids:
-        argv += ["--component-ids"] + list(component_ids)
-    if coc:
+
+def build_argv(invocation, as_json):
+    """Reconstruct the engine argv from a recorded invocation.
+
+    The SINGLE place the engine's argument list is assembled. generate_report.py
+    calls this too, so the deliverable phase cannot drift from this one.
+    """
+    argv = [invocation["input"]]
+    if as_json:
+        argv.append("--json")
+    if invocation.get("component_ids"):
+        argv += ["--component-ids"] + list(invocation["component_ids"])
+    if invocation.get("coc"):
         argv.append("--coc")
-    if config_dir:
-        argv += ["--config-dir", config_dir]
+    if invocation.get("config_dir"):
+        argv += ["--config-dir", invocation["config_dir"]]
+    return argv
 
+
+def run_engine(invocation, as_json=True):
+    """Invoke the vendored CLI. Returns (stdout_text, engine_exit)."""
     buf, err = io.StringIO(), io.StringIO()
     with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(err):
-        engine_exit = cli.main(argv)
-    stderr_text = err.getvalue()
+        engine_exit = cli.main(build_argv(invocation, as_json))
     if engine_exit == 1:
-        # The engine's 1 means it could not read input/config -- a real failure.
-        raise SystemExit(f"engine could not read its input: {stderr_text.strip()}")
+        raise RuntimeError(f"engine could not read its input: {err.getvalue().strip()}")
     return buf.getvalue(), engine_exit
+
+
+def _discard_stale(*paths):
+    """Remove artifacts from a previous run BEFORE this one can fail.
+
+    Round 25 (F-4): a failed re-run used to leave the previous email's
+    case_state.json in place, schema-valid and indistinguishable from a fresh
+    one, with state.json still pointing at the old input. parity_check.py makes
+    exactly this guarantee for fixtures ("Real-execution guarantee C1"); the
+    runtime needs it too. Better no artifact than a confidently wrong one.
+    """
+    for p in paths:
+        if p and os.path.isfile(p):
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
 
 
 def main(argv=None):
@@ -74,13 +110,41 @@ def main(argv=None):
                    help="optional state.json to update with the run's outcome")
     args = p.parse_args(argv)
 
+    # Clear last run's artifacts first, so a failure below cannot leave a stale
+    # case_state.json looking like this run's result.
+    _discard_stale(args.out)
+    if args.state and os.path.isfile(args.state):
+        try:
+            with open(args.state, encoding="utf-8") as fh:
+                _prev = json.load(fh)
+            _prev.pop("extract_case", None)
+            _prev.pop("invocation", None)
+            with open(args.state, "w", encoding="utf-8") as fh:
+                json.dump(_prev, fh, indent=2)
+                fh.write("\n")
+        except (OSError, json.JSONDecodeError):
+            pass
+
     if not os.path.isfile(args.inp):
         print(f"error: no such RFQ file: {args.inp}", file=sys.stderr)
         return 1
 
+    size = os.path.getsize(args.inp)
+    if size > _SLOW_INPUT_BYTES:
+        print(f"warning: input is {size / 1024:.0f} KB; engine runtime grows "
+              "superlinearly past ~100 KB and a multi-hundred-KB thread can take "
+              "minutes", file=sys.stderr)
+
+    invocation = {
+        "input": args.inp,
+        "component_ids": list(args.component_ids),
+        "coc": bool(args.coc),
+        "config_dir": args.config_dir,
+    }
+
     try:
-        payload, engine_exit = run(args.inp, args.component_ids, args.coc, args.config_dir)
-    except SystemExit as e:
+        payload, engine_exit = run_engine(invocation, as_json=True)
+    except RuntimeError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
 
@@ -95,7 +159,6 @@ def main(argv=None):
 
     case = json.loads(payload)
     summary = {
-        "input": args.inp,
         "case_state": args.out,
         "engine_exit": engine_exit,
         "request_class": case.get("request_class"),
@@ -122,13 +185,15 @@ def main(argv=None):
                     state = json.load(fh)
             except (OSError, json.JSONDecodeError):
                 state = {}
+        # The invocation is recorded WHOLE. generate_report.py replays it.
+        state["invocation"] = invocation
         state["extract_case"] = summary
         os.makedirs(os.path.dirname(os.path.abspath(args.state)), exist_ok=True)
         with open(args.state, "w", encoding="utf-8") as fh:
             json.dump(state, fh, indent=2)
             fh.write("\n")
 
-    print(json.dumps(summary, indent=2))
+    print(json.dumps(dict(summary, input=args.inp), indent=2))
     return 0
 
 
