@@ -30,7 +30,10 @@
       "number": 5,
       "name": "Input Filter",
       "slug": "05-input-filter",
-      "status": "verified"
+      "status": "complete",
+      "accepted_by": "andrea.ridi@scaleuplabs.vc",
+      "accepted_kind": "human",
+      "accepted_at": "2026-08-26T18:24:14.097Z"
     }
   ]
 }

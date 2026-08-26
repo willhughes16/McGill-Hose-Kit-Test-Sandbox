@@ -2,10 +2,10 @@
   "version": 1,
   "project": "mcgill-email-to-bom",
   "active_milestone": 1,
-  "active_phase": "05-input-filter",
+  "active_phase": null,
   "status": "planning",
   "decisions": [],
   "blockers": [],
-  "updated_at": "2026-08-26T18:11:02.352Z",
+  "updated_at": "2026-08-26T18:24:14.099Z",
   "activity": null
 }
