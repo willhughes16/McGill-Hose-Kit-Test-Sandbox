@@ -1,0 +1,193 @@
+{
+  "schema_version": "2.0",
+  "extraction": {
+    "customer": "Acme Dairy",
+    "media": "steam",
+    "size": "1/2 ID",
+    "quantity": 4,
+    "end_fittings": [
+      "MALE NPT",
+      "MALE NPT"
+    ],
+    "material": "316 SS",
+    "material_recognized": true,
+    "length_value": "36",
+    "length_type": "seat-to-seat",
+    "pressure": null,
+    "temperature": null,
+    "ends": [
+      {
+        "family": "npt",
+        "evidence": "male npt",
+        "gender": "male",
+        "status": "captured"
+      },
+      {
+        "family": "npt",
+        "evidence": "male npt",
+        "gender": "male",
+        "status": "captured"
+      }
+    ]
+  },
+  "request_class": "hose_assembly",
+  "class_evidence": "hose",
+  "urgency": {
+    "flagged": false,
+    "phrases": []
+  },
+  "fields": {
+    "customer": {
+      "value": "Acme Dairy",
+      "status": "captured"
+    },
+    "media": {
+      "value": "steam",
+      "status": "captured"
+    },
+    "size": {
+      "value": "1/2 ID",
+      "status": "captured"
+    },
+    "quantity": {
+      "value": 4,
+      "status": "captured"
+    },
+    "material": {
+      "value": "316 SS",
+      "status": "captured"
+    },
+    "length": {
+      "value": "36",
+      "status": "reading",
+      "type": "seat-to-seat"
+    },
+    "pressure": {
+      "value": null,
+      "status": "missing"
+    },
+    "temperature": {
+      "value": null,
+      "status": "missing"
+    },
+    "end_1": {
+      "family": "npt",
+      "evidence": "male npt",
+      "gender": "male",
+      "status": "captured"
+    },
+    "end_2": {
+      "family": "npt",
+      "evidence": "male npt",
+      "gender": "male",
+      "status": "captured"
+    }
+  },
+  "open_items": [
+    {
+      "code": "PRESSURE_MISSING",
+      "priority": "confirm",
+      "ask": "Working pressure not stated. Confirm pressure (psi/bar) \u2014 vacuum/suction values are valid too (in Hg / mm Hg).",
+      "field": "pressure"
+    },
+    {
+      "code": "TEMPERATURE_MISSING",
+      "priority": "confirm",
+      "ask": "Operating temperature not stated. Confirm temperature (\u00b0F or \u00b0C; a range is fine).",
+      "field": "temperature"
+    },
+    {
+      "code": "LENGTH_CONFIRM",
+      "priority": "confirm",
+      "ask": "Length read as 36 seat-to-seat \u2014 confirm value and convention before fabrication (WI-020).",
+      "field": "length"
+    },
+    {
+      "code": "SELECTION_UNRESOLVED",
+      "priority": "confirm",
+      "ask": "Hose/coupling not resolved. No grounded selection rule exists (G-1 waived) \u2014 operator must select/confirm the hose and end fittings."
+    },
+    {
+      "code": "HTML_SOURCE_REVIEW",
+      "priority": "confirm",
+      "route": "inside_sales",
+      "ask": "Extracted from an HTML email \u2014 rendering cannot be verified here, so the ORIGINAL message is authoritative; open it before fabrication (DD-1)."
+    }
+  ],
+  "supersedes": [],
+  "routing": {
+    "recommendation": "inside_sales_review",
+    "reasons": [
+      "C1 open",
+      "C2 open",
+      "C3 open"
+    ]
+  },
+  "knowledge": {
+    "source": "none",
+    "revision": null,
+    "lookups": []
+  },
+  "bom_columns": [
+    "Component ID",
+    "Description",
+    "Component Type",
+    "Qty Needed",
+    "Cut Length",
+    "Edited"
+  ],
+  "lines": [
+    {
+      "Component ID": "CMTR Required for all components",
+      "Description": "Verify Material w/QC before fabrication",
+      "Component Type": "None",
+      "Cut Length": "0.00",
+      "Edited": "Unedited",
+      "Qty Needed": "4",
+      "rule_id": "R-CMTR"
+    }
+  ],
+  "classes": [
+    "Certs Required"
+  ],
+  "questions": [
+    {
+      "text": "Working pressure not stated. Confirm pressure (psi/bar) \u2014 vacuum/suction values are valid too (in Hg / mm Hg).",
+      "rule_id": "R-PRESSURE"
+    },
+    {
+      "text": "Operating temperature not stated. Confirm temperature (\u00b0F or \u00b0C; a range is fine).",
+      "rule_id": "R-TEMPERATURE"
+    },
+    {
+      "text": "Length read as 36 seat-to-seat \u2014 confirm value and convention before fabrication (WI-020).",
+      "rule_id": "R-LENGTH"
+    },
+    {
+      "text": "Hose/coupling not resolved. No grounded selection rule exists (G-1 waived) \u2014 operator must select/confirm the hose and end fittings.",
+      "rule_id": "R-CATALOG"
+    }
+  ],
+  "checkpoints": [
+    {
+      "id": "C1",
+      "owner": "QC Department",
+      "status": "PENDING",
+      "rule_id": "R-QC"
+    },
+    {
+      "id": "C2",
+      "owner": "Sales + Production Manager + Quality Team",
+      "status": "PENDING",
+      "rule_id": "R-LENGTH"
+    },
+    {
+      "id": "C3",
+      "owner": "Inside Sales",
+      "status": "PENDING",
+      "rule_id": "R-CATALOG"
+    }
+  ],
+  "notes": [],
+  "logged_attempts": []
+}

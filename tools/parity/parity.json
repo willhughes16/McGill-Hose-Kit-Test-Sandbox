@@ -1,0 +1,68 @@
+{
+  "_provenance": {
+    "source_repo": "ScaleUpLabs/McGill-Core (private; formerly TWYD-Factory-McGill)",
+    "source_commit": "b1f99502adce489f1bd37eddecfbb921a4a4d1f6",
+    "source_version": "2.0.0",
+    "captured_at": "2026-08-26T14:07:52Z",
+    "capture_command": "python -m email_to_bom.cli --json <input>  (run from the source repo root, its own .venv, Python 3.14.6)",
+    "runtime_deps_at_capture": "none - the source declares dependencies = [] and is stdlib-only; pytest>=7.0 is dev-only and not needed to run the engine",
+    "normalization": "NONE. Every fixture declares an empty normalize block. The engine has no clock, no randomness, no run-ids and emits no absolute paths on the CLI path; byte-identical output was confirmed across repeated runs and across PYTHONHASHSEED values. Nothing is masked, so parity cannot be silently loosened.",
+    "fixture_inputs": "plain-steam / quoted-printable / multipart-html are the source's own test fixtures, copied verbatim (already anonymised: .example domains, 'Acme Dairy'). suction-assembly / confirmed-ids / human-render derive from the source's examples/sample_rfq.eml with the IDENTITY LINES ANONYMISED (real sender name, address and end-customer replaced); the technical content is unchanged, and the expected outputs were captured from the source engine running on these anonymised inputs, so parity remains a real capture."
+  },
+  "fixtures": [
+    {
+      "name": "suction-assembly",
+      "command": "python3 src/scripts/run_engine.py --in {input} --out {output}",
+      "input": "tools/parity/fixtures/suction-assembly/input.eml",
+      "output": "tools/parity/fixtures/suction-assembly/actual_output.json",
+      "expected_output": "tools/parity/fixtures/suction-assembly/expected_output.json",
+      "timeout": 60,
+      "normalize": {}
+    },
+    {
+      "name": "plain-steam",
+      "command": "python3 src/scripts/run_engine.py --in {input} --out {output}",
+      "input": "tools/parity/fixtures/plain-steam/input.eml",
+      "output": "tools/parity/fixtures/plain-steam/actual_output.json",
+      "expected_output": "tools/parity/fixtures/plain-steam/expected_output.json",
+      "timeout": 60,
+      "normalize": {}
+    },
+    {
+      "name": "quoted-printable",
+      "command": "python3 src/scripts/run_engine.py --in {input} --out {output}",
+      "input": "tools/parity/fixtures/quoted-printable/input.eml",
+      "output": "tools/parity/fixtures/quoted-printable/actual_output.json",
+      "expected_output": "tools/parity/fixtures/quoted-printable/expected_output.json",
+      "timeout": 60,
+      "normalize": {}
+    },
+    {
+      "name": "multipart-html",
+      "command": "python3 src/scripts/run_engine.py --in {input} --out {output}",
+      "input": "tools/parity/fixtures/multipart-html/input.eml",
+      "output": "tools/parity/fixtures/multipart-html/actual_output.json",
+      "expected_output": "tools/parity/fixtures/multipart-html/expected_output.json",
+      "timeout": 60,
+      "normalize": {}
+    },
+    {
+      "name": "confirmed-ids",
+      "command": "python3 src/scripts/run_engine.py --in {input} --out {output} --component-ids \"OPW 633C A\" \"OPW 633E A\" \"SPS400452\" \"HOS-064 300 EPDM\"",
+      "input": "tools/parity/fixtures/confirmed-ids/input.eml",
+      "output": "tools/parity/fixtures/confirmed-ids/actual_output.json",
+      "expected_output": "tools/parity/fixtures/confirmed-ids/expected_output.json",
+      "timeout": 60,
+      "normalize": {}
+    },
+    {
+      "name": "human-render",
+      "command": "python3 src/generate_report.py --in {input} --out tools/parity/fixtures/human-render/actual_render.txt --state /dev/null && python3 tools/parity/wrap_text.py tools/parity/fixtures/human-render/actual_render.txt {output}",
+      "input": "tools/parity/fixtures/human-render/input.eml",
+      "output": "tools/parity/fixtures/human-render/actual_output.json",
+      "expected_output": "tools/parity/fixtures/human-render/expected_output.json",
+      "timeout": 60,
+      "normalize": {}
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "name": "email-to-bom",
+  "version": "0.1.0",
+  "description": "Read an inbound customer RFQ email and produce a deterministic CaseState plus a draft bill of materials, with every missing, ambiguous or unsafe item raised as an explicit open item. Drafts only - a human reviews and commits in the ERP.",
+  "author": "ScaleUp Labs",
+  "contents": [
+    "CLAUDE.md",
+    "EXAMPLES.md",
+    "README.md",
+    "generate_report.py",
+    "recipes/email-to-bom.yaml",
+    "schemas/case_state.schema.json",
+    "scripts/run_engine.py",
+    "vendor/PROVENANCE.md",
+    "vendor/config/catalog.json",
+    "vendor/config/catalog_candidates.json",
+    "vendor/config/citations.json",
+    "vendor/config/rules.json",
+    "vendor/email_to_bom/__init__.py",
+    "vendor/email_to_bom/cli.py",
+    "vendor/email_to_bom/core.py",
+    "vendor/email_to_bom/fields.py",
+    "vendor/email_to_bom/knowledge.py",
+    "vendor/email_to_bom/mail.py",
+    "vendor/email_to_bom/triage.py",
+    "vendor/email_to_bom/validators.py"
+  ],
+  "download_url": "https://TODO.example/email-to-bom/dist/kit.zip",
+  "sha256": "e7fcbe434f2189a0e8cae3fa2a98dd31dc3d8c3002d747005edd5b848847f62d",
+  "manifest_version": 4,
+  "contract_version": "^1.0.0",
+  "requires": {
+    "tools": [],
+    "runtime": [
+      "python3"
+    ],
+    "astro": ">=0.3.0"
+  },
+  "outputs": {
+    "format": "json",
+    "artifacts": [
+      {
+        "path": "_report/case_state.json",
+        "tags": [
+          "email_attachment"
+        ]
+      },
+      {
+        "path": "_report/bom_draft.md"
+      }
+    ]
+  }
+}

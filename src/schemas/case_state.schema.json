@@ -1,0 +1,336 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CaseState 2.0 \u2014 deterministic engine output for the conversation layer",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "request_class",
+    "urgency",
+    "fields",
+    "open_items",
+    "routing",
+    "extraction",
+    "bom_columns",
+    "lines",
+    "classes",
+    "questions",
+    "checkpoints",
+    "notes",
+    "logged_attempts",
+    "knowledge"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "2.0"
+    },
+    "request_class": {
+      "enum": [
+        "hose_assembly",
+        "bulk_hose",
+        "component_rfq",
+        "order",
+        "stocking_lead",
+        "out_of_scope"
+      ]
+    },
+    "class_evidence": {
+      "type": "string"
+    },
+    "urgency": {
+      "type": "object",
+      "required": [
+        "flagged",
+        "phrases"
+      ],
+      "properties": {
+        "flagged": {
+          "type": "boolean"
+        },
+        "phrases": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "fields": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "enum": [
+              "captured",
+              "reading",
+              "assumed",
+              "needs_unit",
+              "missing",
+              "superseded",
+              "conflict",
+              "missing_gender",
+              "missing_spec",
+              "size_confirm",
+              "configuration_confirm"
+            ]
+          },
+          "value": {},
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "enum": [
+              "gauge",
+              "vacuum",
+              "range",
+              "point",
+              "conflict"
+            ]
+          },
+          "candidates": {
+            "type": "array"
+          },
+          "raw": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "note": {
+            "type": "string"
+          },
+          "family": {
+            "type": "string"
+          },
+          "gender": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "superseded_from": {},
+          "max_f": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "open_items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code",
+          "priority"
+        ],
+        "properties": {
+          "code": {
+            "enum": [
+              "MATERIAL_CONFIRM",
+              "MATERIAL_UNLISTED_GRADE",
+              "LENGTH_CONFIRM",
+              "LENGTH_TYPE_MISSING",
+              "LENGTH_MISSING",
+              "PRESSURE_MISSING",
+              "PRESSURE_UNIT_MISSING",
+              "VACUUM_VALUE_CONFIRM",
+              "PRESSURE_CONFLICT",
+              "PRESSURE_CONFIRM_READING",
+              "DIMENSION_CONFIRM",
+              "TEMPERATURE_MISSING",
+              "TEMPERATURE_UNIT_MISSING",
+              "TEMPERATURE_ASSUMPTION_CONFIRM",
+              "TEMPERATURE_CONFIRM_READING",
+              "SIZE_MISSING",
+              "QTY_MISSING",
+              "FLUID_ASSUMPTION_CONFIRM",
+              "END_GENDER_MISSING",
+              "FLANGE_SPEC_MISSING",
+              "TRI_CLAMP_SIZE_CONFIRM",
+              "CODE6162_CONFIGURATION_CONFIRM",
+              "QTY_CONFIRM_DEFAULT",
+              "COMPONENT_ID_UNRESOLVED",
+              "SELECTION_UNRESOLVED",
+              "COMPONENT_FIELD_MISSING",
+              "DERATING_REVIEW",
+              "CUSTOMER_QUESTION_UNANSWERED",
+              "CAPABILITY_ANSWER_READY",
+              "ROUTED_ACKNOWLEDGE",
+              "CORRECTION_UNRESOLVED",
+              "HIDDEN_CONTENT_DETECTED",
+              "HTML_SOURCE_REVIEW",
+              "COMPONENT_ID_CANDIDATE",
+              "SELECTION_CANDIDATES",
+              "CUSTOMER_CONTEXT_AVAILABLE",
+              "TEMPERATURE_CONFLICT"
+            ]
+          },
+          "priority": {
+            "enum": [
+              "blocking",
+              "confirm",
+              "must_acknowledge"
+            ]
+          },
+          "ask": {
+            "type": "string"
+          },
+          "field": {
+            "type": "string"
+          },
+          "quote": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "route": {
+            "enum": [
+              "inside_sales",
+              "order_desk",
+              "account_owner",
+              "catalog_lookup"
+            ]
+          },
+          "component": {
+            "type": "string"
+          },
+          "component_id": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array"
+          },
+          "citation": {
+            "type": "string"
+          },
+          "tier": {
+            "enum": [
+              "verified",
+              "candidate"
+            ]
+          },
+          "candidates": {
+            "type": "array"
+          },
+          "context_text": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "supersedes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "field",
+          "old",
+          "new"
+        ]
+      }
+    },
+    "routing": {
+      "type": "object",
+      "required": [
+        "recommendation",
+        "reasons"
+      ],
+      "properties": {
+        "recommendation": {
+          "enum": [
+            "inside_sales_review",
+            "order_desk",
+            "account_owner"
+          ]
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "knowledge": {
+      "type": "object",
+      "description": "Provenance of external facts used for this case (DD-3). 'source' names the adapter, 'revision' pins the snapshot when the source has one, 'lookups' is the per-case audit log.",
+      "required": [
+        "source",
+        "lookups"
+      ],
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "revision": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "lookups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "op",
+              "outcome"
+            ],
+            "properties": {
+              "op": {
+                "enum": [
+                  "resolve_component",
+                  "find_candidates",
+                  "ratings_for",
+                  "customer_context",
+                  "query"
+                ]
+              },
+              "arg": {
+                "type": "string"
+              },
+              "outcome": {
+                "enum": [
+                  "hit",
+                  "miss",
+                  "error",
+                  "malformed",
+                  "skipped"
+                ]
+              },
+              "tier": {
+                "type": "string"
+              },
+              "citation": {
+                "type": "string"
+              },
+              "count": {
+                "type": "integer"
+              },
+              "ms": {
+                "type": "integer"
+              },
+              "error": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

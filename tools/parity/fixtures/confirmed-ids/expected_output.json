@@ -1,0 +1,225 @@
+{
+  "schema_version": "2.0",
+  "extraction": {
+    "customer": "Northside Aggregate",
+    "media": "suction",
+    "size": null,
+    "quantity": 1,
+    "end_fittings": [
+      "SHANK",
+      "BARB",
+      "KAM"
+    ],
+    "material": null,
+    "material_recognized": false,
+    "length_value": "4",
+    "length_type": null,
+    "pressure": {
+      "kind": "vacuum",
+      "value": null,
+      "unit": null,
+      "status": "reading",
+      "evidence": "suction"
+    },
+    "temperature": null,
+    "ends": [
+      {
+        "family": "shank",
+        "evidence": "hose shank",
+        "status": "captured"
+      },
+      {
+        "family": "camlock",
+        "evidence": "kam",
+        "gender": "male",
+        "status": "captured"
+      }
+    ]
+  },
+  "request_class": "hose_assembly",
+  "class_evidence": "hose",
+  "urgency": {
+    "flagged": false,
+    "phrases": []
+  },
+  "fields": {
+    "customer": {
+      "value": "Northside Aggregate",
+      "status": "captured"
+    },
+    "media": {
+      "value": "suction",
+      "status": "captured"
+    },
+    "size": {
+      "value": null,
+      "status": "missing"
+    },
+    "quantity": {
+      "value": 1,
+      "status": "captured"
+    },
+    "material": {
+      "value": null,
+      "status": "missing"
+    },
+    "length": {
+      "value": "4",
+      "status": "reading",
+      "type": null
+    },
+    "pressure": {
+      "kind": "vacuum",
+      "value": null,
+      "unit": null,
+      "status": "reading",
+      "evidence": "suction"
+    },
+    "temperature": {
+      "value": null,
+      "status": "missing"
+    },
+    "end_1": {
+      "family": "shank",
+      "evidence": "hose shank",
+      "status": "captured"
+    },
+    "end_2": {
+      "family": "camlock",
+      "evidence": "kam",
+      "gender": "male",
+      "status": "captured"
+    }
+  },
+  "open_items": [
+    {
+      "code": "MATERIAL_CONFIRM",
+      "priority": "confirm",
+      "ask": "Material not confirmed as a specific grade (RFQ mentions non-metal 'epdm'). Operator: confirm the exact material of every component and whether CMTR/QC material verification (WI-031) applies before fabrication.",
+      "field": "material"
+    },
+    {
+      "code": "VACUUM_VALUE_CONFIRM",
+      "priority": "confirm",
+      "ask": "Vacuum/suction service noted \u2014 confirm the vacuum level (in Hg / mm Hg) or 'full vacuum'.",
+      "field": "pressure"
+    },
+    {
+      "code": "TEMPERATURE_MISSING",
+      "priority": "confirm",
+      "ask": "Operating temperature not stated. Confirm temperature (\u00b0F or \u00b0C; a range is fine).",
+      "field": "temperature"
+    },
+    {
+      "code": "SIZE_MISSING",
+      "priority": "confirm",
+      "ask": "Hose size (inside diameter) not stated \u2014 confirm the ID.",
+      "field": "size"
+    },
+    {
+      "code": "LENGTH_TYPE_MISSING",
+      "priority": "confirm",
+      "ask": "Length given without a length type. Confirm convention: overall length (OAL) / seat-to-seat / center-to-end / cut length / live length.",
+      "field": "length"
+    }
+  ],
+  "supersedes": [],
+  "routing": {
+    "recommendation": "inside_sales_review",
+    "reasons": [
+      "C2 open"
+    ]
+  },
+  "knowledge": {
+    "source": "none",
+    "revision": null,
+    "lookups": []
+  },
+  "bom_columns": [
+    "Component ID",
+    "Description",
+    "Component Type",
+    "Qty Needed",
+    "Cut Length",
+    "Edited"
+  ],
+  "lines": [
+    {
+      "Component ID": "OPW 633C A",
+      "Description": "4 ALUM CPLR X HOSE SHANK",
+      "Component Type": "Fitting",
+      "Qty Needed": "1",
+      "Cut Length": "0.00",
+      "Edited": "Unedited",
+      "UOM": "EA",
+      "lead_time_note": "Lead time: TBD by operator",
+      "rule_id": "R-BOM"
+    },
+    {
+      "Component ID": "OPW 633E A",
+      "Description": "4IN MALE KAM X HOSE BARB",
+      "Component Type": "Fitting",
+      "Qty Needed": "1",
+      "Cut Length": "0.00",
+      "Edited": "Unedited",
+      "UOM": "EA",
+      "lead_time_note": "Lead time: TBD by operator",
+      "rule_id": "R-BOM"
+    },
+    {
+      "Component ID": "SPS400452",
+      "Description": "4\" 4-13/16\" 4-3/16\" Plt Stl Slv (Wa)",
+      "Component Type": "Sleeve",
+      "Qty Needed": "1",
+      "Cut Length": "0.00",
+      "Edited": "Unedited",
+      "UOM": "EA",
+      "lead_time_note": "Lead time: TBD by operator",
+      "rule_id": "R-BOM"
+    },
+    {
+      "Component ID": "HOS-064 300 EPDM",
+      "Description": "4 EPDM SUCTION HOSE",
+      "Component Type": "Hose",
+      "Qty Needed": "1",
+      "Cut Length": "0.00",
+      "Edited": "Unedited",
+      "UOM": "FT",
+      "lead_time_note": "Lead time: TBD by operator",
+      "rule_id": "R-BOM"
+    }
+  ],
+  "classes": [],
+  "questions": [
+    {
+      "text": "Material not confirmed as a specific grade (RFQ mentions non-metal 'epdm'). Operator: confirm the exact material of every component and whether CMTR/QC material verification (WI-031) applies before fabrication.",
+      "rule_id": "R-CMTR"
+    },
+    {
+      "text": "Vacuum/suction service noted \u2014 confirm the vacuum level (in Hg / mm Hg) or 'full vacuum'.",
+      "rule_id": "R-PRESSURE"
+    },
+    {
+      "text": "Operating temperature not stated. Confirm temperature (\u00b0F or \u00b0C; a range is fine).",
+      "rule_id": "R-TEMPERATURE"
+    },
+    {
+      "text": "Hose size (inside diameter) not stated \u2014 confirm the ID.",
+      "rule_id": "R-EXTRACT"
+    },
+    {
+      "text": "Length given without a length type. Confirm convention: overall length (OAL) / seat-to-seat / center-to-end / cut length / live length.",
+      "rule_id": "R-LENGTH"
+    }
+  ],
+  "checkpoints": [
+    {
+      "id": "C2",
+      "owner": "Sales + Production Manager + Quality Team",
+      "status": "PENDING",
+      "rule_id": "R-LENGTH"
+    }
+  ],
+  "notes": [],
+  "logged_attempts": []
+}

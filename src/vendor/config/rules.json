@@ -1,0 +1,643 @@
+{
+  "_note": "All domain coordinates live here, never hardcoded. Each rule cites a WI chunk or a TESTREPORT section in citations.json.",
+  "uom_set": [
+    "EA",
+    "FT",
+    "BX",
+    "CS"
+  ],
+  "bom_columns": [
+    "Component ID",
+    "Description",
+    "Component Type",
+    "Qty Needed",
+    "Cut Length",
+    "Edited"
+  ],
+  "length_descriptors": {
+    "OAL": [
+      "oal",
+      "over-all length",
+      "over all length",
+      "overall length"
+    ],
+    "seat-to-seat": [
+      "seat to seat",
+      "seat-to-seat",
+      "seat-seat"
+    ],
+    "center-to-end": [
+      "center to end",
+      "center-to-end",
+      "center-center",
+      "center to center",
+      "center to seat"
+    ],
+    "cut length": [
+      "cut length"
+    ],
+    "live length": [
+      "live length"
+    ]
+  },
+  "_material_callouts_note": "Recognized specific grades -> hard CMTR line + C1 (WI-031, non-exhaustive by design: 'Example 304 or 316'). Expanding this list only ESCALATES (question -> hard CMTR); it can never suppress, because unrecognized metals still hit the unconditional fail-safe question. 'steel' alone is deliberately absent (generic, not a specific callout). Interim expansion 2026-07-10; full closure = P21 material master (G-7).",
+  "material_callouts": [
+    "304",
+    "316",
+    "316l",
+    "321",
+    "347",
+    "904l",
+    "2507",
+    "stainless",
+    "hastelloy",
+    "carpenter 20",
+    "monel",
+    "inconel",
+    "titanium",
+    "duplex",
+    "super duplex",
+    "2205",
+    "nickel",
+    "alloy 20",
+    "alloy 400",
+    "alloy 600",
+    "alloy 718",
+    "c276",
+    "c22",
+    "625",
+    "254 smo",
+    "incoloy",
+    "carbon steel",
+    "17-4 ph",
+    "17-4",
+    "15-5 ph",
+    "15-5",
+    "6mo",
+    "al-6xn",
+    "zeron 100",
+    "nitronic",
+    "ferralium",
+    "stellite",
+    "mp35n",
+    "waspaloy",
+    "nimonic",
+    "elgiloy",
+    "invar",
+    "kovar",
+    "hastalloy",
+    "304l",
+    "c200ss",
+    "d210ss",
+    "austenitic"
+  ],
+  "material_grade_pattern": "\\b(?:alloy|grade|gr\\.?|type)\\s*[a-z]?\\d{2,4}[a-z]?\\b|\\b\\d{3,4}[a-z]?\\s*(?:stainless|ss|steel|alloy)\\b",
+  "non_metal_materials": [
+    "epdm",
+    "rubber",
+    "ptfe",
+    "teflon",
+    "silicone",
+    "polypropylene",
+    "polypro",
+    "poly",
+    "nylon",
+    "pvc",
+    "corroflon",
+    "viton",
+    "buna",
+    "bioflex",
+    "pharmaline",
+    "corroline",
+    "santoprene",
+    "neoprene",
+    "hypalon",
+    "urethane",
+    "polyurethane",
+    "xlpe",
+    "uhmw",
+    "hytrel",
+    "kynar",
+    "pvdf",
+    "nitrile",
+    "fkm",
+    "hnbr"
+  ],
+  "cmtr_line": {
+    "Component ID": "CMTR Required for all components",
+    "Description": "Verify Material w/QC before fabrication",
+    "Component Type": "None",
+    "Cut Length": "0.00",
+    "Edited": "Unedited"
+  },
+  "cmtr_classes": [
+    "Certs Required",
+    "Material Traceability"
+  ],
+  "coc_triggers": [
+    "c of c",
+    "certificate of conformance",
+    "cofc",
+    "certs required",
+    "cert required"
+  ],
+  "coc_line": {
+    "Component ID": "C OF C",
+    "Description": "Certificate of Conformance required",
+    "Component Type": "None",
+    "Cut Length": "0.00",
+    "Edited": "Unedited"
+  },
+  "media_keywords": [
+    "steam",
+    "water",
+    "oil",
+    "fuel",
+    "air",
+    "chemical",
+    "acid",
+    "food",
+    "dairy",
+    "hydraulic",
+    "petroleum",
+    "milk",
+    "suction",
+    "slurry",
+    "sodium hypochlorite",
+    "pneumatic",
+    "gasoline",
+    "diesel",
+    "coolant",
+    "glycol",
+    "grain",
+    "powder",
+    "vapor",
+    "brake fluid",
+    "skydrol",
+    "acetone",
+    "ammonia",
+    "alcohol",
+    "butane",
+    "formaldehyde",
+    "glycerine",
+    "hydrofluoric acid",
+    "ferric chloride",
+    "chlorine"
+  ],
+  "fitting_keywords": [
+    "male npt",
+    "female npt",
+    "npt",
+    "jic",
+    "kam",
+    "cam",
+    "groove",
+    "barb",
+    "shank",
+    "nipple",
+    "flange",
+    "flanges",
+    "camlock",
+    "camlocks",
+    "cam lock",
+    "cam locks",
+    "cam and groove",
+    "cam-and-groove",
+    "tri-clamp",
+    "tri clamp",
+    "triclamp",
+    "tri-clamps",
+    "sanitary clamp",
+    "quick disconnect",
+    "quick-disconnect",
+    "orb",
+    "orfs",
+    "bspp",
+    "code 61",
+    "code 62",
+    "ground joint",
+    "combination nipple",
+    "combination nipples",
+    "universal coupling",
+    "insta-lock"
+  ],
+  "_connection_note": "Per-family follow-up rules from the Sofia test report section 2.2 (TESTREPORT-2.2). gendered:true families ask gender PER END; the rest carry their own mandatory follow-up.",
+  "connection_keywords": {
+    "camlock": [
+      "camlock",
+      "camlocks",
+      "cam lock",
+      "cam locks",
+      "cam and groove",
+      "cam-and-groove",
+      "kam",
+      "insta-lock",
+      "cam & groove"
+    ],
+    "npt": [
+      "male npt",
+      "female npt",
+      "npt"
+    ],
+    "jic": [
+      "jic"
+    ],
+    "orb": [
+      "orb",
+      "o-ring boss"
+    ],
+    "orfs": [
+      "orfs",
+      "o-ring face seal"
+    ],
+    "bspp": [
+      "bspp"
+    ],
+    "quick_disconnect": [
+      "quick disconnect",
+      "quick-disconnect",
+      "qd coupling"
+    ],
+    "code_61_62": [
+      "code 61",
+      "code 62"
+    ],
+    "flange": [
+      "flange",
+      "flanges",
+      "flanged"
+    ],
+    "tri_clamp": [
+      "tri-clamp",
+      "tri clamp",
+      "triclamp",
+      "tri-clamps",
+      "sanitary clamp"
+    ],
+    "barb": [
+      "barb",
+      "hose barb"
+    ],
+    "shank": [
+      "shank",
+      "hose shank"
+    ],
+    "ground_joint": [
+      "ground joint"
+    ]
+  },
+  "connection_families": {
+    "camlock": {
+      "gendered": true,
+      "ask": "gender_per_end",
+      "note": "male adapter / female coupler"
+    },
+    "npt": {
+      "gendered": true,
+      "ask": "gender_per_end"
+    },
+    "jic": {
+      "gendered": true,
+      "ask": "gender_per_end",
+      "note": "female=swivel, male=rigid by convention - never ask swivel separately"
+    },
+    "orb": {
+      "gendered": true,
+      "ask": "gender_per_end"
+    },
+    "orfs": {
+      "gendered": true,
+      "ask": "gender_per_end"
+    },
+    "bspp": {
+      "gendered": true,
+      "ask": "gender_per_end"
+    },
+    "quick_disconnect": {
+      "gendered": true,
+      "ask": "gender_per_end",
+      "note": "plug / socket"
+    },
+    "code_61_62": {
+      "gendered": false,
+      "ask": "configuration"
+    },
+    "flange": {
+      "gendered": false,
+      "ask": "pressure_class_and_fixed_or_floating"
+    },
+    "tri_clamp": {
+      "gendered": false,
+      "ask": "size_confirm",
+      "note": "jump sizes are used - never assume hose size"
+    },
+    "barb": {
+      "gendered": false,
+      "ask": "none"
+    },
+    "shank": {
+      "gendered": false,
+      "ask": "none"
+    },
+    "_default": {
+      "gendered": true,
+      "ask": "gender_per_end"
+    },
+    "ground_joint": {
+      "gendered": true,
+      "ask": "gender_per_end",
+      "note": "spud / wing-nut female"
+    }
+  },
+  "gender_words": {
+    "male": "male",
+    "female": "female",
+    "plug": "male",
+    "socket": "female",
+    "adapter": "male",
+    "coupler": "female"
+  },
+  "flange_class_pattern": "\\b(?:class\\s*)?(150|300|600)\\s*(?:lb|#|lbs|pound)\\b|\\bclass\\s*(150|300|600)\\b",
+  "flange_mount_words": [
+    "fixed",
+    "floating"
+  ],
+  "_pressure_note": "TESTREPORT-2.3/2.4: a number without a unit is not a spec; vacuum and suction are valid pressure conditions.",
+  "pressure_units": [
+    "psi",
+    "psig",
+    "bar",
+    "kpa",
+    "mpa"
+  ],
+  "_pressure_ambiguous_note": "Units that are ordinary English words capture only with tight pressure context ('rated 10 bar'); otherwise they are a reading to confirm ('42 Bar Harbor Road' is an address - V2 round 4).",
+  "pressure_ambiguous_units": [
+    "bar"
+  ],
+  "pressure_context": [
+    "working pressure",
+    "pressure",
+    "rated to",
+    "rated at",
+    "rated",
+    "wp"
+  ],
+  "vacuum_words": [
+    "vacuum",
+    "suction",
+    "negative pressure",
+    "sub-atmospheric",
+    "under vacuum",
+    "vac service"
+  ],
+  "temperature_units_f": [
+    "f",
+    "fahrenheit",
+    "farenheit",
+    "fahrenheight",
+    "farenheight"
+  ],
+  "temperature_units_c": [
+    "c",
+    "celsius",
+    "celcius",
+    "centigrade",
+    "celsuis"
+  ],
+  "temperature_context": [
+    "temperature",
+    "temp is",
+    "temp"
+  ],
+  "ambient_terms": [
+    "ambient",
+    "room temperature",
+    "outdoor temperature"
+  ],
+  "ambient_default_f": [
+    50,
+    90
+  ],
+  "derating_threshold_f": 100,
+  "_class_note": "TESTREPORT-2.10 / requirements 4, 26, 27: classify before selecting fields; never ask hose fields of a non-hose request. Precedence: order, stocking_lead, component_rfq, bulk_hose, hose_assembly, out_of_scope.",
+  "order_patterns": [
+    "\\bp\\.?o\\.?\\s*#?\\s*\\d+",
+    "\\bnew\\s+order\\b",
+    "\\bplace\\s+(?:an|the|this)\\s+order\\b",
+    "\\battached\\s+(?:purchase\\s+)?order\\b"
+  ],
+  "stocking_phrases": [
+    "stocking opportunity",
+    "set us up to stock",
+    "set up to stock",
+    "would like to stock",
+    "start stocking",
+    "stocking lead",
+    "stock these for us",
+    "stocking agreement"
+  ],
+  "component_nouns": [
+    "gasket",
+    "gaskets",
+    "clamp",
+    "clamps",
+    "gauge",
+    "gauges",
+    "coupler",
+    "couplers",
+    "valve",
+    "valves",
+    "nipple",
+    "nipples",
+    "o-ring",
+    "o-rings",
+    "elbow",
+    "elbows",
+    "adapter",
+    "adapters",
+    "fitting",
+    "fittings"
+  ],
+  "bulk_phrases": [
+    "bulk hose",
+    "continuous length",
+    "on a reel",
+    "reel of",
+    "feet of",
+    "ft of",
+    "foot of"
+  ],
+  "product_word_pattern": "\\bhoses?\\b|\\bassembl\\w*\\b|\\bcouplings?\\b|\\bfittings?\\b|\\btubing\\b|\\btube\\b|\\bpipe\\b|\\bduct(?:ing)?\\b",
+  "hose_context_pattern": "\\bhoses?\\b|\\bassembl\\w*\\b|\\btubing\\b|\\btubes?\\b|\\bpipes?\\b|\\bduct(?:ing)?\\b",
+  "component_field_sets": {
+    "gasket": [
+      "size",
+      "used_with",
+      "thickness_standard_or_extra",
+      "material_if_chemical_service"
+    ],
+    "_default": [
+      "item",
+      "size",
+      "media_or_service",
+      "quantity"
+    ]
+  },
+  "component_noun_families": {
+    "gasket": "gasket",
+    "gaskets": "gasket"
+  },
+  "_question_note": "TESTREPORT-2.7 / requirement 7: never leave a customer question unanswered - detect by '?' AND cue phrases; acknowledge and route.",
+  "question_cues": [
+    "can you",
+    "could you",
+    "do you have",
+    "do you carry",
+    "what is",
+    "what's",
+    "what are",
+    "is it possible",
+    "i was hoping",
+    "please advise",
+    "let me know if",
+    "any chance",
+    "how soon",
+    "when can"
+  ],
+  "_question_topic_note": "Checked in order - specific topics before broad ones ('pressure ratings available' is a capability question, not a stock question).",
+  "question_topics": {
+    "tariff": [
+      "tariff",
+      "tariffs",
+      "duty",
+      "duties",
+      "import tax"
+    ],
+    "capability_rating": [
+      "pressure ratings",
+      "ratings available",
+      "what pressure",
+      "max pressure",
+      "maximum pressure",
+      "limit on",
+      "rated for",
+      "temperature limit",
+      "temp limit"
+    ],
+    "derating": [
+      "derate",
+      "derating",
+      "derated"
+    ],
+    "lead_time": [
+      "lead time",
+      "how soon",
+      "when can",
+      "ship date",
+      "delivery"
+    ],
+    "stock_availability": [
+      "in stock",
+      "stock level",
+      "stock check",
+      "availability",
+      "inventory",
+      "on hand"
+    ],
+    "price": [
+      "price",
+      "cost",
+      "how much"
+    ]
+  },
+  "_supersede_note": "TESTREPORT-2.9 / requirement 24: an explicit correction must overwrite the stored value, never be re-asked.",
+  "supersede_markers": [
+    "disregard",
+    "ignore my last",
+    "ignore my previous",
+    "correction to my last",
+    "correction:",
+    "the correct value",
+    "the correct spec",
+    "the correct specs",
+    "that should have been",
+    "actually it's",
+    "actually it is",
+    "scratch that"
+  ],
+  "supersede_weak_markers": [
+    "actually it's",
+    "actually it is"
+  ],
+  "_negation_note": "ONE pre-pass feeding EVERY field selector (blind verification V2 round 3, structural): values inside these clauses are masked before any extraction. Clauses end at but/now/punctuation so replacement values survive.",
+  "negation_patterns": [
+    "\\b(?:not|no longer|never|without|except)\\b\\s*[^,.;\\n]*?(?=\\bbut\\b|\\bnow\\b|[,.;\\n]|$)",
+    "\\bwas\\b\\s*[^,.;\\n]*?(?=,?\\s*(?:is\\s+)?now\\b)",
+    "[^,.;\\n]{0,48}\\b(?:is|was)\\s+(?:not correct|incorrect|wrong)\\b",
+    "[^,.;\\n]{0,48}\\b(?:won'?t|will not|doesn'?t|does not)\\s+(?:work|do|cut it|fly|suffice|be enough)\\b",
+    "[^,.;\\n]{0,48}\\b(?:is|are)\\s+not\\s+enough\\b",
+    "[^,.;\\n]{0,48}\\b(?:isn'?t|aren'?t)\\s+enough\\b|[^,.;\\n]{0,48}\\b(?:is|are)\\s+insufficient\\b",
+    "[^,.;\\n]{0,48}\\b(?:is|are)\\s+inadequate\\b"
+  ],
+  "_urgency_note": "TESTREPORT-2.12 / requirement 30: recognize the full family of urgency language and carry it to the handoff.",
+  "urgency_phrases": [
+    "asap",
+    "urgent",
+    "urgently",
+    "rush",
+    "ship immediately",
+    "need this today",
+    "need it today",
+    "need this tomorrow",
+    "need it tomorrow",
+    "expedite",
+    "hot order",
+    "right away"
+  ],
+  "fluid_defaults": {
+    "hydraulic": "petroleum-based hydraulic oil"
+  },
+  "crimp_triggers": [
+    "crimp",
+    "crimp diameter",
+    "crimp spec",
+    "compression ratio"
+  ],
+  "price_stock_triggers": [
+    "price",
+    "pricing",
+    "cost",
+    "how much",
+    "quote price",
+    "in stock",
+    "stock level",
+    "availability",
+    "available qty"
+  ],
+  "price_stock_decline": "Pricing, stock and availability are checked by inside sales / P21 - routed with this request; no figure is estimated here.",
+  "crimp_required_phrases": [
+    "starting point",
+    "must be pressure tested"
+  ],
+  "crimp_manufacturer_attribution": "correct compression ratios can only come from the manufacturer of the hose and fittings",
+  "default_lead_time_note": "Lead time: TBD by operator",
+  "customer_generic_suffixes": [
+    "service",
+    "duty",
+    "use",
+    "application",
+    "applications",
+    "line",
+    "lines",
+    "and",
+    "or",
+    "&",
+    "/",
+    "hot",
+    "cold",
+    "high",
+    "low",
+    "pressure",
+    "temp"
+  ]
+}

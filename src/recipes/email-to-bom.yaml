@@ -1,0 +1,119 @@
+name: email-to-bom
+description: >
+  Read an inbound customer RFQ email and produce a deterministic CaseState plus a
+  draft bill of materials, with every missing, ambiguous or unsafe item raised as an
+  explicit open item. Drafts only — a human reviews and commits in the ERP.
+version: 1
+
+phases:
+  # ─────────────────────────────────────────────────────────────────────
+  # PHASE 0 — Prepare
+  # ─────────────────────────────────────────────────────────────────────
+  - name: prepare
+    goal: >
+      Initialize the run in the CURRENT working directory.
+
+      IMPORTANT: Do NOT cd anywhere. Stay in pwd for ALL work.
+
+      Step 1 — Parse $ARGUMENTS. Required: the path to ONE RFQ email
+      (`.eml` or `.txt`). Optional: `--component-ids A B ...` for Component IDs
+      an operator has already confirmed, and `--coc` when the customer requires
+      a Certificate of Conformance. If no RFQ path is given, print usage and STOP.
+
+      Step 2 — Verify the file exists and is readable. If not, print the path
+      you tried and STOP — do NOT guess at another file, and do NOT invent
+      email content.
+
+      Step 3 — Create `_report/` and write `_report/state.json` with the
+      resolved input path and the optional flags, so later phases and any
+      resumed run read the same inputs.
+    constraints:
+      - "Stay in pwd — do NOT cd or create files outside _report/"
+      - "Required RFQ path missing → print usage and STOP"
+      - "NEVER fabricate or paraphrase email content — the engine reads the raw bytes"
+      - "Use python3 for JSON file manipulation"
+    input: []
+    output:
+      - _report/state.json
+
+  # ─────────────────────────────────────────────────────────────────────
+  # PHASE 1 — Extract the case
+  # ─────────────────────────────────────────────────────────────────────
+  - name: extract_case
+    goal: >
+      Produce the CaseState — the run's machine-readable contract.
+
+      Use: python3 scripts/run_engine.py --in <RFQ path>
+           --out _report/case_state.json --state _report/state.json
+      Pass through --component-ids / --coc exactly as given in phase 0.
+
+      The script wraps the vendored deterministic engine and writes its output
+      verbatim. Read the summary it prints, then STOP and read
+      `_report/case_state.json` before saying anything about the request.
+
+      Interpreting the result:
+        - `engine_exit` is 2 for essentially every real RFQ. That is the NORMAL,
+          by-design outcome and means "a draft was produced and it has open
+          items". It is NOT an error. Only the wrapper's own non-zero exit is a
+          failure.
+        - `open_items[]` is the authoritative list of what is missing, ambiguous
+          or unsafe, each with a stable `code`, an `ask`, a `priority`
+          (blocking / confirm / must_acknowledge) and a `route`.
+        - `fields{}` carries every field with a status and its evidence. A field
+          with status `reading` is NOT captured — the engine deliberately refuses
+          to capture ambiguous units, so a `reading` must be confirmed, never
+          assumed.
+        - `request_class` decides which fields even apply. A component or order
+          request must NOT be pushed through hose-assembly questions.
+
+      Do NOT answer, resolve, or guess at any open item. Do NOT add, remove or
+      reword them. Your job is to report them faithfully.
+    constraints:
+      - "ALWAYS use scripts/run_engine.py — NEVER hand-write or edit case_state.json"
+      - "engine_exit=2 is normal (draft with open items) — never report it as a failure"
+      - "NEVER answer, drop, reword or re-prioritize an open item"
+      - "NEVER invent a part number, price, lead time or stock position"
+      - "A field with status `reading` or `assumed` is unconfirmed — say so explicitly"
+      - "Record intermediate results in _report/ so the run is resumable"
+      - "Update state.json when the phase completes"
+    input:
+      - _report/state.json
+    output:
+      - _report/state.json
+      - _report/case_state.json
+
+  # ─────────────────────────────────────────────────────────────────────
+  # PHASE 2 — Generate deliverable
+  # ─────────────────────────────────────────────────────────────────────
+  - name: generate_report
+    goal: >
+      Produce the kit's human-readable deliverable.
+
+      Use: python3 generate_report.py --out _report/bom_draft.md
+           --state _report/state.json
+
+      Output: _report/bom_draft.md — the draft BOM table, the harness-held
+      checkpoints, the operator questions and the open items, exactly as the
+      engine renders them.
+
+      Then summarise for the requester, in this order: what the engine
+      understood (`request_class` and the captured fields), what it needs
+      answered before a quote is possible (the open items, highest priority
+      first), and where the case should be routed (`routing`). State plainly
+      that this is a draft that a human must review — never imply it is a quote,
+      a confirmed BOM, or an order.
+
+      Remember `bom_draft.md` is a LOSSY view: it omits `fields`, `routing`,
+      `knowledge` and `supersedes`. Cite `_report/case_state.json` as the
+      authoritative record, and attach that file.
+    constraints:
+      - "ALWAYS use the script — NEVER generate the deliverable by hand"
+      - "If the script fails, debug and fix it — do NOT create the artifact manually"
+      - "NEVER present the draft as a quote, a confirmed BOM, or a committed order"
+      - "NEVER state a price, a lead time or a stock position the engine did not produce"
+      - "Report every open item — do NOT summarise them away or judge them minor"
+    input:
+      - _report/state.json
+      - _report/case_state.json
+    output:
+      - _report/bom_draft.md

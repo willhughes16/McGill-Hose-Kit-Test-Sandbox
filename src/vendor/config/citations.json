@@ -1,0 +1,129 @@
+{
+  "_note": "Rule ID -> governing WI + verbatim chunk IDs fetched in the compile session. Every agent output line carries its rule_id; this file resolves rule_id -> source.",
+  "R-EXTRACT": {
+    "doc": "WI-020 / WI-064",
+    "chunks": [
+      "6a4fb54c8111761d0e60774b_chunk_0",
+      "6a4fb54a8111761d0e6076b5_chunk_0"
+    ],
+    "quote": "Determining the hose length begins with the conversation with the customer by the order taker/salesperson."
+  },
+  "R-CUSTOMER": {
+    "doc": "WI-062",
+    "chunks": [
+      "6a4fb54e8111761d0e60777f_chunk_0",
+      "6a4fb54e8111761d0e60777f_chunk_1"
+    ],
+    "quote": "Make sure the drop down says 'Contains' NOT 'Starts With' ... Use spaces to separate abbreviated characters: 'R M D Enterprises'."
+  },
+  "R-LENGTH": {
+    "doc": "WI-020",
+    "chunks": [
+      "6a4fb54c8111761d0e60774b_chunk_0"
+    ],
+    "quote": "OAL, Seat to Seat, Center to end, Cut Length, Live length."
+  },
+  "R-CMTR": {
+    "doc": "WI-031",
+    "chunks": [
+      "6a4fb54e8111761d0e607788_chunk_0",
+      "6a4fb54e8111761d0e607788_chunk_1"
+    ],
+    "quote": "enter the first line as follows: Use ID: CMTR Required for all components; Item Description: Verify Material w/QC before fabrication ... choose either 'Certs Required' or 'Material Traceability'."
+  },
+  "R-QC": {
+    "doc": "WI-031",
+    "chunks": [
+      "6a4fb54e8111761d0e607788_chunk_0",
+      "6a4fb54e8111761d0e607788_chunk_1"
+    ],
+    "quote": "We need to alert the QC department to verify material certification prior to the material being prepped for welding. Quality will sign of the production order once the material has been reviewed."
+  },
+  "R-COC": {
+    "doc": "WI-064",
+    "chunks": [
+      "6a4fb54a8111761d0e6076b5_chunk_1",
+      "6a4fb54a8111761d0e6076b5_chunk_2"
+    ],
+    "quote": "If customer requires a C of C for non-assembly parts, then add line item to the order. Also note Certs Required in the Classes tab."
+  },
+  "R-BOM": {
+    "doc": "WI-052",
+    "chunks": [
+      "6a4fb54f8111761d0e6077b4_chunk_1"
+    ],
+    "quote": "columns for Component ID, Description, Component Type, Qty Needed, Cut Length, and Edited."
+  },
+  "R-LEADTIME": {
+    "doc": "WI-064",
+    "chunks": [
+      "6a4fb54a8111761d0e6076b5_chunk_1"
+    ],
+    "quote": "Enter order line note: Lead time for each item."
+  },
+  "R-UOM": {
+    "doc": "WI-061",
+    "chunks": [
+      "6a4fb54f8111761d0e6077ab_chunk_1"
+    ],
+    "quote": "UNIT INFO TAB: TYPE IN UNIT TYPE i.e.: EA, FT, BX, CS."
+  },
+  "R-CATALOG": {
+    "doc": "WI-061 / G-1 waiver / G-5",
+    "chunks": [
+      "6a4fb54f8111761d0e6077ab_chunk_0"
+    ],
+    "quote": "Item Maintenance module in P21; new-item creation is a human step. Agent references existing catalog IDs only (FR-11)."
+  },
+  "R-CRIMP": {
+    "doc": "WI-087",
+    "chunks": [
+      "6a4fb54d8111761d0e607773_chunk_9"
+    ],
+    "quote": "Any crimp diameter created using this form must be pressure tested to verify ... Correct compression ratios can only come from the manufacturers of the hose and fittings, all others are suggestions."
+  },
+  "R-PRESSURE": {
+    "doc": "Sofia Test Report Rounds 1-2 (v3) - TESTREPORT-2.3 / TESTREPORT-2.4 / req 5-6",
+    "quote": "The assistant must never accept a bare numeric value for pressure ... Vacuum and suction are normal, viable applications ... '25 in Hg' ... must be representable in the pressure field."
+  },
+  "R-TEMPERATURE": {
+    "doc": "Sofia Test Report Rounds 1-2 (v3) - TESTREPORT-2.3 / req 5, 16, 29",
+    "quote": "'Temp is 50' ... incomplete ... ask: Fahrenheit or Celsius? Ranges are valid answers ... 'assuming 70\u00b0F for room temperature - please advise' ... recognize 'Celcius', 'farenheit'."
+  },
+  "R-ENDS": {
+    "doc": "Sofia Test Report Rounds 1-2 (v3) - TESTREPORT-2.2 / req 14",
+    "quote": "pretty much any hydraulic fitting is gendered ... 'Stainless steel camlocks' is NOT a complete answer ... flange: MUST follow up on pressure class AND fixed or floating ... tri-clamp: MUST still confirm the size."
+  },
+  "R-CLASSIFY": {
+    "doc": "Sofia Test Report Rounds 1-2 (v3) - TESTREPORT-2.10 / req 4, 26, 27",
+    "quote": "It needs to classify message type - order, stocking lead, component RFQ, hose RFQ, out-of-scope - before deciding what to ask ... Never ask hose fields of a non-hose request."
+  },
+  "R-QUESTIONS": {
+    "doc": "Sofia Test Report Rounds 1-2 (v3) - TESTREPORT-2.7 / req 7, 11",
+    "quote": "Any time the customer asks a question, the assistant must address it ... A question mark is the usual signal, but not the only one ... recognize a stock question and route it to inside sales."
+  },
+  "R-SUPERSEDE": {
+    "doc": "Sofia Test Report Rounds 1-2 (v3) - TESTREPORT-2.9 / req 24",
+    "quote": "a message that explicitly supersedes a prior answer ('disregard X, the correct value is Y') must overwrite the stored value for that field, not be treated as a fresh unanswered prompt."
+  },
+  "R-URGENCY": {
+    "doc": "Sofia Test Report Rounds 1-2 (v3) - TESTREPORT-2.12 / req 30",
+    "quote": "'ASAP', 'ship immediately', 'rush', 'urgent', 'need this today' - all of them should be picked up and carried through to the handoff summary the same way."
+  },
+  "R-COMPONENT-FIELDS": {
+    "doc": "Sofia Test Report Rounds 1-2 (v3) - TESTREPORT-2.11 / req 28",
+    "quote": "Gaskets: size, what it's for/what it's used with, sometimes thickness ... The assistant needs its own field set per item family instead of falling back to the hose STAMPED checklist."
+  },
+  "R-DERATING": {
+    "doc": "Sofia Test Report Rounds 1-2 (v3) - TESTREPORT-2.5 / req 8",
+    "quote": "recognize when a request needs derating and hand it off with that flagged, rather than either attempting the calculation or quietly dropping the question."
+  },
+  "R-FLUID-DEFAULT": {
+    "doc": "Sofia Test Report Rounds 1-2 (v3) - TESTREPORT-2.1 / req 12",
+    "quote": "Hydraulic hose carries hydraulic oil. That is the default ... State the assumption and offer the exception ... All inferred values must be labeled as assumptions, never asserted as fact."
+  },
+  "R-VOCAB-GRAPH": {
+    "doc": "twyd-mc-gill knowledge graph sweep, 2026-08-21",
+    "quote": "Vocabulary enrichment from graph entities (498 material, 61 application, 28 chemical, 10 fitting, 6 fluid entities): media/chemical terms, material grade spellings incl. the observed misspelling 'hastalloy', and fitting families from McGill training decks. Escalate-only: these entries add recognition and asks, never suppress them."
+  }
+}

@@ -1,0 +1,15 @@
+From: purchasing@acmedairy.example
+To: sales@mcgillhose.example
+Subject: RFQ - steam hose assembly
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="BOUNDARY42"
+
+--BOUNDARY42
+Content-Type: text/html; charset="us-ascii"
+
+<html><head><style>p { color: red; }</style></head><body>
+<p>Hi McGill team,</p>
+<p>Please quote 4 of a 36in seat-to-seat 1/2in ID 316 SS steam hose, male NPT both ends, for Acme Dairy.</p>
+<p>Thanks, Pat</p>
+</body></html>
+--BOUNDARY42--

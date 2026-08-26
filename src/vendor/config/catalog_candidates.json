@@ -1,0 +1,70 @@
+{
+  "_note": "UNVERIFIED catalog candidates harvested from the twyd-mc-gill graph (2026-08-21). These appear in vendor decks and correspondence, NOT in a P21 item master \u2014 McGill must confirm each is a stocked SKU before it is promoted to catalog.json. The engine does NOT load this file.",
+  "candidates": [
+    {
+      "id": "T4050-04",
+      "hint": "1/4\" post sintered lined tube",
+      "citation": "6a50fe8a8111761d0e621182_chunk_85"
+    },
+    {
+      "id": "T4050-06",
+      "hint": "3/8\" post sintered lined tube",
+      "citation": "6a50fe8a8111761d0e621182_chunk_85"
+    },
+    {
+      "id": "T4050-08",
+      "hint": "1/2\" post sintered lined tube",
+      "citation": "6a50fe8a8111761d0e621182_chunk_85"
+    },
+    {
+      "id": "CSTF-150-2240",
+      "hint": "crimp ferrule",
+      "citation": "6a50fe8a8111761d0e62116d_chunk_74"
+    },
+    {
+      "id": "CSTS-075",
+      "hint": "crimp stem",
+      "citation": "6a50fe8a8111761d0e62116d_chunk_74"
+    },
+    {
+      "id": "BU4115.W",
+      "hint": "welded plug",
+      "citation": "6a4fb54c8111761d0e607749_chunk_12"
+    },
+    {
+      "id": "KF10",
+      "hint": "vacuum fitting",
+      "citation": "6a5634c5c905d21ca6c9082d_chunk_7062"
+    },
+    {
+      "id": "2720606C",
+      "hint": "Parker cylinder (sales inquiry)",
+      "citation": "6a5634c5c905d21ca6c9082d_chunk_9424"
+    },
+    {
+      "id": "569010955010",
+      "hint": "hose model product code",
+      "citation": "6a5104dd8111761d0e62120d_chunk_25"
+    },
+    {
+      "id": "6131008X500",
+      "hint": "hose model product code",
+      "citation": "6a5104dd8111761d0e62120d_chunk_25"
+    },
+    {
+      "id": "5690101270020",
+      "hint": "hose model product code",
+      "citation": "6a5104dd8111761d0e62120d_chunk_25"
+    },
+    {
+      "id": "802-030",
+      "hint": "soc x fpt fitting",
+      "citation": "graph entity 'part'"
+    },
+    {
+      "id": "6400-20-16-O",
+      "hint": "JIC adapter",
+      "citation": "graph entity 'part'"
+    }
+  ]
+}

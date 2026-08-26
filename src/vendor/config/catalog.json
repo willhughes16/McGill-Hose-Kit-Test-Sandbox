@@ -1,0 +1,11 @@
+{
+  "_note": "Grounded catalog fixture. Component IDs and descriptions verbatim from twyd-mcgill chunks; component_type values are operator-curated enrichment (not chunk-verbatim) used only for lead-time bookkeeping. The agent may reference ONLY these IDs (FR-11); anything else routes to an operator question (C3/AC-11). Replace/extend from P21 item master in production.",
+  "items": [
+    {"id": "OPW 633C A", "description": "4 ALUM CPLR X HOSE SHANK", "component_type": "Fitting", "uom": "EA", "citation": "6a4fb54f8111761d0e6077b4_chunk_1"},
+    {"id": "OPW 633E A", "description": "4IN MALE KAM X HOSE BARB", "component_type": "Fitting", "uom": "EA", "citation": "6a4fb54f8111761d0e6077b4_chunk_1"},
+    {"id": "SPS400452", "description": "4\" 4-13/16\" 4-3/16\" Plt Stl Slv (Wa)", "component_type": "Sleeve", "uom": "EA", "citation": "6a4fb54f8111761d0e6077b4_chunk_1"},
+    {"id": "HOS-064 300 EPDM", "description": "4 EPDM SUCTION HOSE", "component_type": "Hose", "uom": "FT", "citation": "6a4fb54f8111761d0e6077b4_chunk_1"},
+    {"id": "LABOR CHARGE ITEM", "description": "LABOR", "component_type": "Labor", "uom": "EA", "citation": "6a4fb54f8111761d0e6077b4_chunk_1"},
+    {"id": "QD DF SERIES D2M2", "description": "1/4 IND L NIPPLE 1/4 M-NPTF STEEL", "component_type": "Fitting", "uom": "EA", "citation": "6a4fb54a8111761d0e6076b5_chunk_1"}
+  ]
+}
