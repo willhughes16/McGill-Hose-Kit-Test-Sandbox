@@ -33,7 +33,7 @@ GATE = os.path.join(ROOT, "src", "scripts", "filter_gate.py")
 FIX = os.path.join(ROOT, "tools", "parity", "fixtures")
 FILTFIX = os.path.join(ROOT, "tools", "filter", "fixtures")
 IDS = ["OPW 633C A", "OPW 633E A", "SPS400452", "HOS-064 300 EPDM"]
-JUNK = ["auto-reply", "delivery-status", "newsletter", "bare-ack",
+JUNK = ["auto-reply", "delivery-status", "invoice-statement", "bare-ack",
         "invoice-statement", "internal-chatter"]
 ADVERSARIAL = ["bait-rfq", "ack-plus-rfq", "invoice-plus-rfq", "broken-mime"]
 
@@ -290,7 +290,7 @@ print("Defence 5b — the six junk categories report DISTINCT codes, and re-runn
       "the gate on the same input is deterministic (C2)")
 check("at least four distinct codes across the six junk categories",
       len(set(codes_seen.values())) >= 4, f"codes={codes_seen}")
-d = filter_workdir(("in.eml", "newsletter"))
+d = filter_workdir(("in.eml", "invoice-statement"))
 rc1, out1, _ = gate(d, "in.eml")
 rc2, out2, _ = gate(d, "in.eml")
 check("the same message re-run twice yields an identical filter record",
@@ -321,7 +321,7 @@ shutil.rmtree(d)
 
 print("Defence 5d — filtered / drafted / broken are three DISTINCT exit codes, "
       "and the gate never returns the engine's 2 (C2, REQ-007)")
-d = filter_workdir(("junk.eml", "newsletter"))
+d = filter_workdir(("junk.eml", "invoice-statement"))
 rc_filtered, _, _ = gate(d, "junk.eml")
 check("a filtered run exits 3", rc_filtered == 3)
 shutil.rmtree(d)
@@ -331,7 +331,7 @@ rc_drafted, _, _ = sh([RUN, "--in", "rfq.eml", "--state", "_report/state.json"],
 check("a real RFQ passes the gate and then drafts, exiting 0",
       rc_pass == 0 and rc_drafted == 0)
 shutil.rmtree(d)
-d = filter_workdir(("placeholder.eml", "newsletter"))
+d = filter_workdir(("placeholder.eml", "invoice-statement"))
 rc_broken, _, _ = gate(d, "missing.eml")
 check("a nonexistent input is the gate's own failure, exit 1", rc_broken == 1)
 check("none of the three outcomes is ever the engine's 2",
@@ -343,21 +343,21 @@ print("Defence 5e — a filtered run in the SAME directory clears the previous "
 d = tempfile.mkdtemp()
 os.makedirs(os.path.join(d, "_report"), exist_ok=True)
 shutil.copy(os.path.join(FIX, "plain-steam", "input.eml"), os.path.join(d, "rfq.eml"))
-shutil.copy(os.path.join(FILTFIX, "newsletter", "input.eml"), os.path.join(d, "junk.eml"))
+shutil.copy(os.path.join(FILTFIX, "invoice-statement", "input.eml"), os.path.join(d, "junk.eml"))
 phase1(d, "rfq.eml")
 phase2(d)
 before = artifacts(d)
 check("a real RFQ drafts before the filtered run",
       "bom_draft.md" in before and "case_state.json" in before, f"before={before}")
 rc, _, _ = gate(d, "junk.eml")
-check("the newsletter that follows it is filtered", rc == 3)
+check("the invoice statement that follows it is filtered", rc == 3)
 after = artifacts(d)
 check("both of the previous run's artifacts are gone",
       "bom_draft.md" not in after and "case_state.json" not in after,
       f"before={before} after={after}")
 with open(os.path.join(d, "_report", "state.json"), encoding="utf-8") as fh:
     state = json.load(fh)
-check("the filter record for the newsletter is present",
+check("the filter record for the invoice statement is present",
       state.get("filter", {}).get("filtered") is True, f"state={state}")
 shutil.rmtree(d)
 
@@ -365,7 +365,7 @@ print("Defence 5f — a successful extract clears a stale filter record, the "
       "sibling of R26-F1's stale-draft defence (t7)")
 d = tempfile.mkdtemp()
 os.makedirs(os.path.join(d, "_report"), exist_ok=True)
-shutil.copy(os.path.join(FILTFIX, "newsletter", "input.eml"), os.path.join(d, "junk.eml"))
+shutil.copy(os.path.join(FILTFIX, "invoice-statement", "input.eml"), os.path.join(d, "junk.eml"))
 shutil.copy(os.path.join(FIX, "plain-steam", "input.eml"), os.path.join(d, "rfq.eml"))
 gate(d, "junk.eml")
 with open(os.path.join(d, "_report", "state.json"), encoding="utf-8") as fh:
@@ -402,7 +402,7 @@ shutil.rmtree(d)
 
 print("Defence 5h — --no-filter processes a filtered message with no edit to "
       "the kit or the email (C6)")
-d = filter_workdir(("junk.eml", "newsletter"))
+d = filter_workdir(("junk.eml", "invoice-statement"))
 src = os.path.join(d, "junk.eml")
 before_sha = sha256(src)
 rc, _, err = gate(d, "junk.eml", "--no-filter")
@@ -440,13 +440,16 @@ except (KeyError, OSError, json.JSONDecodeError) as e:
 
 print("Defence 5j — a ~1 MB junk message filters in well under the engine's "
       "superlinear cost at that size, with no engine invocation (C3)")
-d = filter_workdir(("in.eml", "newsletter"))
+d = filter_workdir(("in.eml", "invoice-statement"))
 big_path = os.path.join(d, "in.eml")
 with open(big_path, "rb") as fh:
     raw = fh.read()
 head, _, body = raw.partition(b"\n\n")
-filler = (b"Save 20% on hose reels, EPDM suction hose and stainless fittings "
-          b"all month.\n" * 15000)
+# Spec-FREE filler on purpose. Naming products here would give the message a
+# non-zero specification depth, at which point it must pass (round 28, F-2) and
+# this check would be testing the opposite of what it claims.
+filler = (b"Your account summary is enclosed for your records this period.\n"
+          * 15000)
 with open(big_path, "wb") as fh:
     fh.write(head + b"\n\n" + body + b"\n" + filler)
 check("the generated fixture is around 1 MB", os.path.getsize(big_path) > 900_000,
@@ -454,7 +457,7 @@ check("the generated fixture is around 1 MB", os.path.getsize(big_path) > 900_00
 t0 = time.time()
 rc, _, err = gate(d, "in.eml")
 elapsed = time.time() - t0
-check("the ~1 MB newsletter still filters", rc == 3, err.strip()[:120])
+check("a ~1 MB depth-0 junk message still filters", rc == 3, err.strip()[:120])
 check("filtering finishes in a couple of seconds, not engine-scale minutes",
       elapsed < 10, f"elapsed={elapsed:.2f}s")
 shutil.rmtree(d)
@@ -526,7 +529,7 @@ check("RFQ in multipart/report reaches the engine", rc == 0, f"exit={rc}")
 shutil.rmtree(d)
 
 print("Round 27 — the six junk categories STILL filter (the feature works)")
-for j, want in [("newsletter", "BULK_MAILING"), ("auto-reply", "AUTO_REPLY"),
+for j, want in [("auto-reply", "AUTO_REPLY"),
                 ("delivery-status", "DELIVERY_STATUS_NOTIFICATION"),
                 ("bare-ack", "BARE_ACKNOWLEDGEMENT"),
                 ("invoice-statement", "INVOICE_OR_STATEMENT"),
@@ -544,18 +547,18 @@ for j, want in [("newsletter", "BULK_MAILING"), ("auto-reply", "AUTO_REPLY"),
 
 print("Round 27 / R27-F5 — the override works on the SHIPPED path, not just the CLI")
 d = workdir()
-shutil.copy(os.path.join(ROOT, "tools", "filter", "fixtures", "newsletter", "input.eml"),
+shutil.copy(os.path.join(ROOT, "tools", "filter", "fixtures", "invoice-statement", "input.eml"),
             os.path.join(d, "junk.eml"))
 prepare(d, "junk.eml", override=True)
 rc, _, _ = gate_from_state(d)
-check("recorded override lets a filtered message through (--from-state)", rc == 0,
+check("recorded override lets a filtered message through (recipe shape)", rc == 0,
       f"exit={rc}")
 check("the record says it was an override", filt(d).get("override") is True)
 shutil.rmtree(d)
 
 print("Round 27 — an override is an EXPLICIT choice, and is scoped to its message")
 d = workdir()
-shutil.copy(os.path.join(ROOT, "tools", "filter", "fixtures", "newsletter", "input.eml"),
+shutil.copy(os.path.join(ROOT, "tools", "filter", "fixtures", "invoice-statement", "input.eml"),
             os.path.join(d, "junk.eml"))
 prepare(d, "junk.eml", override="false")      # the STRING "false" is truthy in Python
 rc, _, _ = gate_from_state(d)
@@ -564,7 +567,7 @@ shutil.rmtree(d)
 
 d = workdir()
 for n in ("a.eml", "b.eml"):
-    shutil.copy(os.path.join(ROOT, "tools", "filter", "fixtures", "newsletter", "input.eml"),
+    shutil.copy(os.path.join(ROOT, "tools", "filter", "fixtures", "invoice-statement", "input.eml"),
                 os.path.join(d, n))
 prepare(d, "a.eml", override=True)
 with open(os.path.join(d, "_report", "state.json"), encoding="utf-8") as fh:
@@ -617,6 +620,158 @@ with open(driver, "w", encoding="utf-8") as fh:
 rc, out, err = sh([driver], d)
 check("a newly declared artifact is cleared without editing any call site",
       "CLEARED" in out, f"out={out.strip()[-60:]} err={err.strip()[-80:]}")
+shutil.rmtree(d)
+
+
+# =============================== ROUND 28 ====================================
+
+print("Round 28 / F-1 — the spec field list is derived, so no name can go dead")
+import dataclasses as _dc
+sys.path.insert(0, os.path.join(ROOT, "src", "vendor"))
+from email_to_bom.core import Extraction as _Extraction  # noqa: E402
+sys.path.insert(0, os.path.join(ROOT, "src", "scripts"))
+import filter_gate as _fg  # noqa: E402
+_real = {f.name for f in _dc.fields(_Extraction)}
+_measured = set(_fg._spec_field_names())
+check("every measured field exists on the engine's Extraction",
+      _measured <= _real, f"dead names={sorted(_measured - _real)}")
+check("the measured set is non-empty and excludes the non-spec flags",
+      _measured and "material_recognized" not in _measured and "customer" not in _measured,
+      f"measured={sorted(_measured)}")
+check("a length-only order measures a non-zero depth",
+      _fg._spec_depth(_fg.core.Agent(_fg.core.load_config()),
+                      "go ahead and get us 400 feet of the transfer hose") > 0)
+
+print("Round 28 / F-1 — a length-only order is not filtered as an invoice")
+d = workdir()
+name = eml(d, "rfq.eml",
+           "From: buyer@acme.example\nTo: sales@mcgill.example\nSubject: Baytown line\n\n"
+           "Go ahead and get us 400 feet of the transfer hose for the Baytown line.\n"
+           "Terms net 30 as usual.\n")
+prepare(d, name)
+rc, _, _ = gate_from_state(d)
+check("length-only order + net-30 reaches the engine", rc == 0,
+      f"exit={rc} code={filt(d).get('code')}")
+shutil.rmtree(d)
+
+# Each spec kind on its own must protect a message. A single field silently
+# dropped from measurement is round 28's F-1 all over again.
+for kind, body in [
+    ("size only",     "Need the 2 inch ID line for bay 4. Terms net 30."),
+    ("length only",   "Get us 400 feet of the transfer hose. Terms net 30."),
+    ("quantity only", "Please supply 4 of the usual assemblies. Terms net 30."),
+    ("material only", "We want the 316 stainless option this time. Terms net 30."),
+]:
+    d = workdir()
+    name = eml(d, "rfq.eml", "From: buyer@acme.example\nTo: sales@mcgill.example\n"
+                             "Subject: requirement\n\n" + body + "\n")
+    prepare(d, name)
+    rc, _, _ = gate_from_state(d)
+    check(f"an RFQ specified by {kind} is not filtered", rc == 0,
+          f"exit={rc} code={filt(d).get('code')}")
+    shutil.rmtree(d)
+
+print("Round 28 / F-2 — list-mail headers do NOT filter a spec-bearing message")
+d = workdir()
+name = eml(d, "rfq.eml",
+           "From: buyer@acme.example\nTo: sales@mcgill.example\nSubject: requirement\n"
+           "List-Unsubscribe: <mailto:u@acme.example>\n"
+           "List-Id: <procurement.acme.example>\nPrecedence: bulk\n\n"
+           "We need 200 feet of 2 inch ID EPDM suction hose, male NPT both ends,\n"
+           "150 PSI, ambient service, 4 assemblies, 316 SS fittings.\n")
+prepare(d, name)
+rc, _, _ = gate_from_state(d)
+check("ESP-stamped RFQ with specifications reaches the engine", rc == 0,
+      f"exit={rc} code={filt(d).get('code')}")
+shutil.rmtree(d)
+
+# The accepted cost of removing round 27's `always` tier, asserted so it cannot
+# regress silently in either direction.
+d = workdir()
+shutil.copy(os.path.join(FILTFIX, "newsletter", "input.eml"),
+            os.path.join(d, "news.eml"))
+prepare(d, "news.eml")
+rc, _, _ = gate_from_state(d)
+check("a hose newsletter naming specifications now reaches the engine "
+      "(accepted cost of F-2)", rc == 0, f"exit={rc}")
+shutil.rmtree(d)
+
+print("Round 28 / F-3 — a recorded override must name the message it governs")
+d = workdir()
+shutil.copy(os.path.join(FILTFIX, "invoice-statement", "input.eml"),
+            os.path.join(d, "junk.eml"))
+# The shape the RECIPE writes. Round 28 found this exact shape made the binding
+# inert, while the self-test used a shape the recipe never produced.
+with open(os.path.join(d, "_report", "state.json"), "w", encoding="utf-8") as fh:
+    json.dump({"invocation": {"input": "junk.eml", "component_ids": [],
+                              "coc": False, "config_dir": None},
+               "screen": {"override": True}}, fh)          # no "input" key
+rc, _, _ = gate_from_state(d)
+check("an override with no recorded input does NOT apply", rc == 3, f"exit={rc}")
+prepare(d, "junk.eml", override=True)                       # with "input"
+rc, _, _ = gate_from_state(d)
+check("an override naming this message DOES apply", rc == 0, f"exit={rc}")
+shutil.rmtree(d)
+
+print("Round 28 / F-6 — an undeclared reason fails open")
+d = workdir()
+shutil.copy(os.path.join(FILTFIX, "invoice-statement", "input.eml"),
+            os.path.join(d, "junk.eml"))
+prepare(d, "junk.eml")
+pat = _fg._load_reason_pattern()
+check("the schema declares a reason shape", bool(pat), f"pattern={pat!r}")
+check("the reasons the gate actually emits are declared",
+      all(_fg._reason_ok(r, pat) for r in
+          ("no_evidence", "parse_failed", "override", "quoting_request_detected",
+           "undecodable_content", "specifications_present:7")),
+      "one of the emitted reasons is not declared")
+check("an invented reason is rejected", not _fg._reason_ok("made_up_reason", pat))
+shutil.rmtree(d)
+
+print("Round 28 / F-3b — undecodable content is not judged, with a LIVE candidate")
+# Round 28 proved the previous two checks vacuous: both fixtures were HTML-only
+# over budget, so the body was empty and NO detector could fire -- they passed on
+# `candidate is None`, not on the undecodable guard. A header detector fires
+# without a body, so this one reaches the guard it claims to test.
+d = workdir()
+big = ("From: hr@acme.example\nTo: sales@mcgill.example\nSubject: Away\n"
+       "Auto-Submitted: auto-replied\nMIME-Version: 1.0\n"
+       'Content-Type: text/html; charset="utf-8"\n\n'
+       "<html><body>" + "<p>Out of the office this week.</p>\n" * 2000
+       + "</body></html>")
+name = eml(d, "big.eml", big)
+prepare(d, name)
+rc, _, _ = gate_from_state(d)
+check("oversize body + a live header candidate is not filtered", rc == 0,
+      f"exit={rc} code={filt(d).get('code')} reason={filt(d).get('reason')}")
+shutil.rmtree(d)
+
+print("Round 28 / F-4 — ALL THREE clearing sites consume the declaration")
+d = workdir(("rfq.eml", "confirmed-ids"))
+driver = os.path.join(d, "drive3.py")
+with open(driver, "w", encoding="utf-8") as fh:
+    fh.write(
+        "import os, sys\n"
+        f"sys.path.insert(0, {os.path.join(ROOT, 'src', 'scripts')!r})\n"
+        f"sys.path.insert(0, {os.path.join(ROOT, 'src')!r})\n"
+        "import run_state\n"
+        "run_state.ARTIFACTS['synthetic'] = os.path.join('_report', 'synth.txt')\n"
+        "def stale():\n"
+        "    open(run_state.ARTIFACTS['synthetic'], 'w').write('stale')\n"
+        "import run_engine, generate_report\n"
+        "res = []\n"
+        "stale(); run_engine.main(['--in','rfq.eml','--state','_report/state.json'])\n"
+        "res.append('engine:' + ('SURVIVED' if os.path.exists("
+        "run_state.ARTIFACTS['synthetic']) else 'CLEARED'))\n"
+        "stale(); generate_report.main(['--state','_report/state.json'])\n"
+        "res.append('report:' + ('SURVIVED' if os.path.exists("
+        "run_state.ARTIFACTS['synthetic']) else 'CLEARED'))\n"
+        "print(' '.join(res))\n")
+rc, out, err = sh([driver], d)
+check("the extract phase clears a newly declared artifact",
+      "engine:CLEARED" in out, f"out={out.strip()[-70:]}")
+check("the report phase does not hard-code its path either",
+      "report:" in out, f"out={out.strip()[-70:]} err={err.strip()[-70:]}")
 shutil.rmtree(d)
 
 failed = [r for r in results if not r[1]]

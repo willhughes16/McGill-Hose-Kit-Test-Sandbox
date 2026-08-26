@@ -221,6 +221,47 @@ back on filter-free v0.3.0.
   command line while the recipe only ever uses `--from-state` plus the record. All
   round-27 checks drive `--from-state`, and each new guard is mutation-proved.
 
+### Round 28 (blind verification) — closed findings, now requirements
+
+Round 28 returned **FAIL** with two CRITICALs. Bar: `ACCEPTANCE_ROUND28.md`; report:
+`VERIFICATION_ROUND28.md`. It confirmed round 27's fix was a real improvement (RFQ loss
+24/35 → 15/39 on an independent corpus) and then found it broken on its own central claim.
+This is the fourth consecutive round whose findings were all introduced by the previous
+round's fix pass.
+
+- REQ-044 The measured field set is DERIVED from the engine, never hand-listed. F-1:
+  `_SPEC_FIELDS` named `"length"`, which `core.Extraction` does not have (it has
+  `length_value`/`length_type`), so `getattr(e, "length")` was `None` for every message
+  ever written and a length-only order — "get us 400 feet of the transfer hose" —
+  measured depth 0 and was filtered as an invoice. `_spec_field_names()` now reads
+  `dataclasses.fields(core.Extraction)` minus a small non-spec exclusion set, so a name
+  cannot go dead and a field the engine adds later counts as protection by default.
+- REQ-045 No category is exempt from the depth guard. F-2: `filter_tier: "always"` let
+  true list-mail skip it, leaving that category protected solely by the veto — whose
+  `request_act` half is the 16-phrase list round 27 was failed for. A customer whose ESP
+  stamps `List-Unsubscribe` was dropped to `no_action` with EIGHT specification kinds
+  extracted. The tier concept is deleted. **Accepted cost:** a supplier newsletter naming
+  hose specifications now reaches the engine and produces a draft an operator dismisses.
+  The phase-5 constraint settles that trade — filtering out a real RFQ is far worse.
+- REQ-046 An override must name the message it governs, and the RECIPE must write it.
+  F-3: `screen_applies()` honoured an input-less record and the recipe template wrote
+  exactly that, so the binding was inert on the only path the recipe uses — while the
+  self-test wrote a shape the recipe never produced. That is R27-F5's lesson
+  reintroduced inside the fix for R27-F5.
+- REQ-047 Every clearing site resolves paths through the declaration. F-4: R27-F4 was
+  closed at two of three sites; `generate_report.py` still hand-wrote its path while
+  `all_artifacts()`'s docstring claimed no site names files. `artifact_path(name)` serves
+  single-artifact owners; the self-test now probes all three.
+- REQ-048 The whole decision record is validated, not two of its fields. F-6: `reason`
+  was unvalidated and the schema's closed enum omitted both reasons round 27 added, so
+  every spec-bearing pass-through violated the shipped schema unnoticed.
+- REQ-049 Mutation survival is reported as a number. Rounds 26, 27 and 28 each had 9
+  behaviour-changing mutations leave the suite green. The round-28 pass mutation-tested
+  all seven fixes: **0 of 7 survived**, including "drop length from measurement", the
+  exact defect F-1 found. Two `undecodable` checks that round 28 proved vacuous (both
+  fixtures were HTML-only over budget, so no detector could fire and they passed on
+  `candidate is None`) were rewritten to carry a live header candidate.
+
 ## Constraints
 
 - **Never edit `src/vendor/`** to change an outcome. It is a stamped verbatim copy;

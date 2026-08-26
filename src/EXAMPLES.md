@@ -167,7 +167,9 @@ filtered run is never left sitting beside a stale draft).
   a failure.
 - **What actually protects a real RFQ: the specifications in it.** The gate
   measures how many specification fields the vendored engine extracts from a
-  message — size, length, quantity, material, media, pressure, temperature, end
+  message — the fields are read off the engine's own extraction record rather
+  than listed here, and today that means media, size, quantity, end fittings,
+  material, length (value and type), pressure, temperature and per-end
   connections. Any message with **at least one** extracted specification is
   passed to the engine, except for true list-mail (see below). This is a measured
   property, not a phrase list, and it is monotone: the more a customer specifies,
@@ -187,11 +189,14 @@ filtered run is never left sitting beside a stale draft).
   is loud and stops the run.
 - **Known limit.** A genuine request carrying *no* extractable specification —
   "please quote the attached drawing", with the detail only in an attachment —
-  and also carrying a junk signal can still be filtered. Such a message is routed
-  to a human queue (`inside_sales_fyi` / `accounts_payable` / `internal_ops`),
-  never to `no_action`, so it is visible rather than discarded, and `--no-filter`
-  processes it. Real RFQ corpora would tell us how often this shape occurs; it has
-  not been measured.
+  and also carrying a junk signal can still be filtered. Where it goes depends on
+  the category: the content categories route to a human queue
+  (`inside_sales_fyi` / `accounts_payable` / `internal_ops`), but the
+  machine-header categories — auto-reply, bounce, bulk — route to `no_action`, so
+  a spec-less request arriving with an `Auto-Submitted` header **can** be filed
+  where nobody looks. `--no-filter` processes it. This is the gate's sharpest
+  remaining edge; real RFQ corpora would tell us how often the shape occurs, and
+  it has not been measured.
 - **Direct, without Astro, the documented sequence runs the gate first.**
   ```
   python3 scripts/filter_gate.py --in rfq.eml --state _report/state.json

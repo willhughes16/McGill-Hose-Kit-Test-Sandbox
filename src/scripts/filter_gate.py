@@ -33,17 +33,22 @@ script must never emit outside of are declared in
 relative path so this runs the same way in the repo tree and in the unzipped
 kit under `python3 -S -E`.
 
-Whether a candidate category actually gets filtered turns on the
-quoting-request veto (ADR-005's sibling decision, recorded with the others):
-a message that carries BOTH the vendored classifier's own "in scope" verdict
-AND some sign of an actual request (a question mark, one of the engine's own
-`question_cues`, an `order`/`stocking_lead` classification, or a kit-side
-`quote_request_cues` hit) is never filtered, however junk-shaped its headers
-look. This is what saves a real RFQ that happens to carry bulk/auto-reply
-headers, opens with a polite "thanks, got it", or is bundled with an invoice
-paragraph (C5). DELIVERY_STATUS_NOTIFICATION is the one category exempt from
-the veto -- a bounce is never a request, even one that echoes RFQ text back
-in its body.
+Whether a candidate category actually gets filtered turns on SPECIFICATION
+DEPTH: `_spec_depth()` counts the fields the vendored engine extracts from the
+message, and a message with ANY specification at all is never filtered, however
+junk-shaped its headers look. No category is exempt. That is what saves a real
+RFQ carrying bulk or auto-reply headers, opening with "thanks, got it", bundled
+with an invoice paragraph, or arriving through a sourcing portal.
+
+The measurement is a property of the message, and the field list is derived from
+the engine's own `Extraction` dataclass rather than written out here, so a field
+cannot go dead and a field the engine adds later counts as protection by default.
+Two earlier designs failed exactly here and both are worth remembering: round 27
+protected RFQs with a 16-phrase `quote_request_cues` list and lost 24 of 35
+genuine requests to a line of "Terms net 30."; round 28 then found a hand-written
+field tuple naming "length", which `Extraction` does not have, so length-only
+orders measured zero. The quoting-request veto still runs as a second net, but it
+is never the only thing between a customer and a silent drop.
 
 The gate never rewrites, copies or re-encodes the input file -- it only
 reads it -- so a message that reaches the engine is byte-identical to what
@@ -52,6 +57,7 @@ this script was given (C4).
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import os
 import re
@@ -105,6 +111,28 @@ def _load_enums(path=SCHEMA_PATH):
         return codes, routes
     except (OSError, json.JSONDecodeError, AttributeError):
         return None, None
+
+
+def _load_reason_pattern(path=SCHEMA_PATH):
+    """The declared shape of `reason`, from the same schema as the code/route
+    enums. Returns None when unreadable -- callers then skip validation rather
+    than treat an unreadable schema as grounds to filter."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)["properties"]["reason"].get("pattern")
+    except (OSError, json.JSONDecodeError, KeyError, AttributeError):
+        return None
+
+
+def _reason_ok(reason, pattern):
+    """Whether a reason matches the shipped schema's declared shape.
+
+    Round 28 (F-6) found only `code`/`route` validated, so the two reasons round
+    27 added made every spec-bearing pass-through violate the schema unnoticed.
+    """
+    if reason is None or not pattern:
+        return True
+    return bool(re.match(pattern, str(reason)))
 
 
 # ------------------------------- text helpers --------------------------------
@@ -193,33 +221,41 @@ def _collect_text(msg, signals):
     return "\n".join(texts), undecodable
 
 
-# Fields the vendored extractor fills from a real specification. Read off the
-# engine, not re-listed vocabulary: this counts HOW MUCH the customer specified.
-_SPEC_FIELDS = ("size", "length", "quantity", "material", "media",
-                "pressure", "temperature")
+# Non-spec fields on the engine's Extraction record. Everything ELSE counts as a
+# specification, derived from the dataclass itself -- so a field name cannot go
+# dead and a field the engine adds later counts as protection by default (the
+# safe direction). Round 28 (F-1) found `_SPEC_FIELDS` hand-listing "length",
+# which `Extraction` does not have (it has length_value/length_type), so
+# getattr(e, "length") was None for every message ever written and a length-only
+# order -- "get us 400 feet of the transfer hose" -- measured depth 0 and was
+# filtered as an invoice. A hand-written list of attribute names is an
+# enumeration that can silently stop matching the thing it enumerates.
+_NON_SPEC_FIELDS = frozenset({
+    "customer",              # who asked, not what they want
+    "material_recognized",   # a bool flag about `material`, not a spec itself
+})
 
 
-def _tier_for(code, signals):
-    """The declared filter tier for a category code. Data, not code."""
-    for cat in signals.get("categories", []):
-        if cat.get("code") == code:
-            # Default to the SAFE tier when a category forgets to declare one:
-            # an undeclared category must not gain the power to drop a spec-
-            # bearing message just by omission.
-            return cat.get("filter_tier", "requires_no_specs")
-    return "requires_no_specs"
+def _spec_field_names():
+    """Spec-bearing Extraction fields, read off the engine's own dataclass."""
+    return tuple(f.name for f in dataclasses.fields(core.Extraction)
+                 if f.name not in _NON_SPEC_FIELDS)
+
+
+def _is_specified(value):
+    """Whether an extracted field actually carries a specification."""
+    if value is None or value is False:
+        return False
+    return value not in ("", [], {})
 
 
 def _spec_depth(agent, low):
     """How many specification fields the engine extracts from this message.
 
-    The round-27 replacement for `quote_request_cues` as the thing protecting a
-    real RFQ. A phrase list is an enumeration and sat on the unsafe side of the
-    decision; this is a measured property of the message and it is monotone --
-    more customer detail means more protection, with no vocabulary to keep up to
-    date. Junk carries zero: every filtered fixture except the newsletter
-    extracts nothing at all, while the RFQs round 27 wrongly dropped extract
-    three to five fields.
+    The round-27 replacement for a phrase list as the thing protecting a real
+    RFQ, and the ONLY thing that protects one: a message with any specification
+    at all is never filtered. Measured, not enumerated, and monotone -- more
+    customer detail means more protection.
     """
     if agent is None:
         return 99      # no extractor => unknown depth => fail toward the engine
@@ -227,11 +263,7 @@ def _spec_depth(agent, low):
         e = agent.extract(low)
     except Exception:  # noqa: BLE001 - never let the guard's own failure filter
         return 99      # unknown depth counts as "specified": fail toward the engine
-    n = sum(1 for f in _SPEC_FIELDS
-            if getattr(e, f, None) not in (None, "", [], {}))
-    if getattr(e, "ends", None):
-        n += 1
-    return n
+    return sum(1 for f in _spec_field_names() if _is_specified(getattr(e, f, None)))
 
 
 def _is_request_act(low, klass, rules, signals):
@@ -425,21 +457,29 @@ def _decide(raw, filename, rules, signals, agent=None):
                 "evidence": None, "reason": "undecodable_content"}
 
     code, route, evidence = candidate
-    tier = _tier_for(code, signals)
 
-    # GUARD 1 -- specification depth, a measured property of the message.
-    # 'requires_no_specs' categories may filter ONLY when the engine extracts
-    # nothing at all. This replaces the 16-phrase cue list that round 27 (R27-F1)
-    # defeated with one line of "Terms net 30." on a 200-foot EPDM order.
-    if tier != "always":
-        depth = _spec_depth(agent, low)
-        if depth > 0:
-            return {"filtered": False, "code": None, "route": None,
-                    "evidence": None, "reason": f"specifications_present:{depth}"}
+    # THE GUARD -- specification depth, a measured property of the message, and
+    # the only thing between a customer request and a silent drop. It applies to
+    # EVERY category without exception.
+    #
+    # Round 27 exempted true list-mail ("nobody orders hose from a mailing
+    # list"), which left that category protected solely by the veto below --
+    # whose request_act half is the 16-phrase cue list round 27 was failed for.
+    # Round 28 (F-2) then dropped a customer whose ESP stamps List-Unsubscribe,
+    # with EIGHT specification kinds extracted. The exemption is gone: the
+    # enumeration must not be load-bearing anywhere, for anyone.
+    #
+    # The cost is real and accepted: a supplier newsletter naming hose
+    # specifications now reaches the engine and produces a draft an operator
+    # dismisses. PROJECT.md's phase-5 constraint settles that trade outright --
+    # "filtering out a real RFQ is far worse than passing a newsletter through".
+    depth = _spec_depth(agent, low)
+    if depth > 0:
+        return {"filtered": False, "code": None, "route": None,
+                "evidence": None, "reason": f"specifications_present:{depth}"}
 
-    # GUARD 2 -- the quoting-request veto, kept as a second net. It is no longer
-    # load-bearing (guard 1 is), which is the point: an enumeration must never be
-    # the only thing between a real customer request and a silent drop.
+    # SECOND NET -- the quoting-request veto. Never load-bearing: the depth guard
+    # above applies to every category, so this only ever adds protection.
     klass, _ev = triage.classify(low, rules)
     product_signal = klass != "out_of_scope"
     request_act = _is_request_act(low, klass, rules, signals)
@@ -557,6 +597,18 @@ def main(argv=None):
                                    signals, agent)
 
         code, route = raw_decision.get("code"), raw_decision.get("route")
+        # Round 28 (F-6): only code/route were checked, so the two reasons round
+        # 27 added made every spec-bearing pass-through violate the shipped
+        # schema unnoticed. Validate the whole declared record, not two of its
+        # fields.
+        reason = raw_decision.get("reason")
+        if not _reason_ok(reason, _load_reason_pattern()):
+            print(f"warning: gate produced an undeclared reason {reason!r}; "
+                  "failing open (this message will reach the engine)",
+                  file=sys.stderr)
+            raw_decision = {"filtered": False, "code": None, "route": None,
+                             "evidence": None, "reason": "no_evidence"}
+            code = route = None
         code_ok = allowed_codes is None or code in allowed_codes
         route_ok = allowed_routes is None or route in allowed_routes
         if not (code_ok and route_ok):

@@ -64,14 +64,8 @@
         "string",
         "null"
       ],
-      "enum": [
-        "quoting_request_detected",
-        "no_evidence",
-        "parse_failed",
-        "override",
-        null
-      ],
-      "description": "Short machine token for why a pass-through happened. Null when the message was filtered."
+      "description": "Short machine token for why a pass-through happened. Null when the message was filtered. One of: quoting_request_detected, no_evidence, parse_failed, override, undecodable_content, or specifications_present:<N> where N is the number of specification fields the engine extracted. Round 28 (F-6) found the closed enum omitted the two reasons round 27 added, so every spec-bearing pass-through violated this schema.",
+      "pattern": "^(quoting_request_detected|no_evidence|parse_failed|override|undecodable_content|specifications_present:[0-9]+)$"
     }
   }
 }

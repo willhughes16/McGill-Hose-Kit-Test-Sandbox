@@ -193,20 +193,42 @@ def screen_applies(screen, input_path):
     if not screen or not screen.get("override"):
         return False
     recorded = screen.get("input")
-    if not recorded or not input_path:
-        return True
+    if not recorded:
+        # Round 28 (F-3): honouring an input-less record made the binding inert
+        # on the SHIPPED path -- the recipe template wrote {"override": bool}
+        # with no input, while the self-test wrote a shape the recipe never
+        # produced. An override that disables the only safeguard against a
+        # silent drop must say which message it was granted for.
+        return False
+    if not input_path:
+        return False
     return os.path.abspath(recorded) == os.path.abspath(input_path)
+
+
+def artifact_path(name, **overrides):
+    """The path of ONE declared artifact. For a site that owns a single file.
+
+    Round 28 (F-4) found `generate_report.py` still hand-writing its path while
+    `all_artifacts()`'s docstring claimed no clearing site names files. A site
+    that legitimately owns one artifact resolves it through the declaration by
+    NAME; only a site clearing the whole run uses all_artifacts().
+    """
+    return artifact_paths(**overrides)[name]
 
 
 def all_artifacts(**overrides):
     """Every artifact path a run owns, as a LIST, for invalidation.
 
+    For sites that clear the WHOLE run (the gate, the extract phase). A site
+    owning a single artifact uses artifact_path(name) instead -- neither ever
+    hard-codes a filename.
+
     Round 27 (R27-F4) found that although ARTIFACTS was declared centrally, all
     three clearing sites hand-wrote `[paths["case_state"], paths["bom_draft"]]`.
     Nothing consumed the declaration as a set, so adding a third artifact would
     have been missed everywhere -- R26-F1's exact mechanism, intact behind a
-    docstring claiming otherwise. Clearing sites call THIS; they never name
-    files. Verified by the self-test adding a synthetic artifact.
+    docstring claiming otherwise. Verified by the self-test adding a synthetic
+    artifact and requiring both whole-run sites to clear it.
     """
     return list(artifact_paths(**overrides).values())
 

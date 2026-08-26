@@ -35,10 +35,18 @@ phases:
                         "component_ids": [<any confirmed IDs>],
                         "coc": <true|false>,
                         "config_dir": <path or null>},
-         "screen": {"override": <true if --no-filter was given, else false>}}
+         "screen": {"override": <true if --no-filter was given, else false>,
+                    "input": "<the SAME resolved path as invocation.input>"}}
 
       `screen` is NOT part of `invocation` — `--no-filter` is not an engine flag
       and must never reach `run_engine.py`'s argv (it would put parity at risk).
+
+      `screen.input` is REQUIRED when `override` is true, and must equal
+      `invocation.input`. An override is granted for ONE message: without the
+      path the gate ignores the record, so a stale override cannot silently
+      disable the filter for a different email. Round 28 found the template
+      omitting it, which made the binding inert on this, the only path the
+      recipe actually uses.
       This record is the ONLY place the run's arguments are written down. Phases
       0.5 and 1 read it with `--from-state`; you must NOT re-type the flags onto
       their command lines. Round 26 found that re-typing them here was an
@@ -50,6 +58,7 @@ phases:
       - "Required RFQ path missing → print usage and STOP"
       - "Write EVERY parsed flag into state.json's invocation — later phases read it, not your command lines"
       - "--no-filter is not an engine flag — record it under state.json's screen, never inside invocation"
+      - "an override MUST carry screen.input equal to invocation.input, or the gate ignores it"
       - "NEVER fabricate or paraphrase email content — the engine reads the raw bytes"
       - "Use python3 for JSON file manipulation"
     input: []

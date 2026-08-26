@@ -51,7 +51,8 @@ for _p in (os.path.join(_HERE, "vendor"), os.path.join(_HERE, "scripts")):
 
 from run_engine import run_engine, warn_if_slow  # noqa: E402  (ONE argv builder)
 from run_state import (  # noqa: E402
-    ARTIFACTS, StateError, artifact_paths, invalidate, make_invocation,
+    ARTIFACTS, StateError, artifact_path, artifact_paths, invalidate,
+    make_invocation,
     normalize_invocation, read_state,
 )
 
@@ -96,7 +97,7 @@ def main(argv=None):
     # Clear our own artifact before anything that can fail, so no failure path
     # leaves the previous run's draft behind (R26-F1). Loud on failure (R26-F5).
     try:
-        invalidate([artifact_paths(bom_draft=args.out)["bom_draft"]])
+        invalidate([artifact_path("bom_draft", bom_draft=args.out)])
     except StateError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
