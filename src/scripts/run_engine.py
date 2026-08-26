@@ -47,7 +47,7 @@ for _p in (_VENDOR, _HERE):
 
 from email_to_bom import cli  # noqa: E402  (needs the sys.path lines above)
 from run_state import (  # noqa: E402
-    ARTIFACTS, FILTER_KEY, StateError, all_artifacts, artifact_paths, build_argv, invalidate,
+    ARTIFACTS, StateError, all_artifacts, artifact_paths, build_argv, invalidate,
     make_invocation, normalize_invocation, read_state, write_state,
 )
 
@@ -167,11 +167,8 @@ def main(argv=None):
     try:
         invalidate(all_artifacts(case_state=args.out, bom_draft=args.draft))
         if args.state:
-            # Also drop any prior FILTER_KEY record: a record of a decision NOT
-            # to run the engine can only mislead once the engine has actually
-            # run (the sibling of R26-F1, in the new screen_input code path).
             write_state(args.state, {"invocation": invocation},
-                        drop=("extract_case", FILTER_KEY))
+                        drop=("extract_case",))
     except StateError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1

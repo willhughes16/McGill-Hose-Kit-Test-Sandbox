@@ -95,19 +95,6 @@ bounce, an invoice/statement, a bare "thanks, got it.", or internal chatter)
 
 **Expected workflow:**
 1. `prepare` — resolves `newsletter.eml`, writes `_report/state.json`.
-2. `screen_input` — `scripts/filter_gate.py` decides BEFORE the engine runs,
-   without invoking it, and exits `3`: nothing to quote. **The run STOPS
-   here.** Read the `filter` record `screen_input` wrote into
-   `_report/state.json` and report its `code` (one of
-   `DELIVERY_STATUS_NOTIFICATION`, `AUTO_REPLY`, `BULK_MAILING`), its
-   `route` and the `input` path, in plain language. Mention `--no-filter` as
-   the override if the requester believes this is a false positive.
-3. `extract_case` and `generate_report` never run.
-
-**Produces:** nothing new under `_report/` beyond `state.json`'s `filter`
-record — no `_report/case_state.json`, no `_report/bom_draft.md`. If a
-previous run's artifacts existed in this directory, they are gone too (a
-filtered run is never left sitting beside a stale draft).
 
 ## Argument Reference
 
@@ -117,7 +104,6 @@ filtered run is never left sitting beside a stale draft).
 | `--component-ids` | list of strings | none | Component IDs an operator has already confirmed. Matched case-insensitively against the catalog; hits become BOM lines, misses become blocking asks. Also forces `hose_assembly` classification. |
 | `--coc` | flag | off | The customer requires a Certificate of Conformance. |
 | `--config-dir` | path | shipped `vendor/config/` | An alternate rules/catalog/citations directory — e.g. one backed by the P21 item master. |
-| `--no-filter` | flag | off | Force the input filter (`screen_input`, `scripts/filter_gate.py`) to pass this message through to the engine regardless of its own decision — the documented escape hatch for a false positive. Never edit the message or kit source to get past the gate; use this flag. |
 
 ## Common Patterns
 
@@ -157,63 +143,6 @@ filtered run is never left sitting beside a stale draft).
   `resolve_component` op. Do not build a branch for either. The schema is kept
   byte-identical to the source's contract rather than corrected here, so the fix
   belongs upstream.
-- **The filter gate runs before the engine and has its own exit codes — `3`
-  is not an error.** `scripts/filter_gate.py` (phase `screen_input`) exits
-  `0` (not filtered — continue), `3` (filtered — nothing to quote, STOP the
-  run) or `1` (the gate's own failure: bad usage, unreadable input,
-  unwritable state). The gate never emits the engine's own `2`; treat `3`
-  the same way you treat the engine's `2` — a normal, expected outcome, not
-  a failure.
-- **What actually protects a real RFQ: the specifications in it.** The gate
-  measures how many specification fields the vendored engine extracts from a
-  message — the fields are read off the engine's own extraction record rather
-  than listed here, and today that means media, size, quantity, end fittings,
-  material, length (value and type), pressure, temperature and per-end
-  connections. Any message with **at least one** extracted specification is
-  passed to the engine, except for true list-mail (see below). This is a measured
-  property, not a phrase list, and it is monotone: the more a customer specifies,
-  the more protected they are. An earlier version protected RFQs with a 16-phrase
-  "quote request" list instead, and one line of `Terms net 30.` was enough to
-  drop a 200-foot EPDM order — the list was on the wrong side of the decision.
-- **No category is exempt from the specification guard.** An earlier version let
-  list-mail skip it; a customer whose ESP stamps `List-Unsubscribe` was then
-  dropped with eight spec kinds extracted. Nothing skips it now.
-- **The filter fails toward running the engine.** Everything the gate cannot
-  resolve confidently — no text obtained, a parse defect, an HTML-only body over
-  its scan budget, an unrecognised or undecodable part, an undeclared code/route,
-  unreadable reference data, or a failure inside the gate itself — resolves to
-  *not filtered*. Only a hard input error (the path itself missing or unreadable)
-  is loud and stops the run.
-- **Three categories, all header-declared.** `AUTO_REPLY` (`Auto-Submitted:
-  auto-replied`, or `X-Autoreply`), `DELIVERY_STATUS_NOTIFICATION` (an RFC 3464
-  report), `BULK_MAILING` (`List-Unsubscribe` plus `Precedence: bulk`/`List-Id`).
-  Invoice, bare-acknowledgement and internal-chatter filtering was **removed**:
-  judging a message by its prose or its addressing dropped 11 of 46 genuine RFQs,
-  including 6 sent to accounts payable because they contained "net 30". Those
-  messages now produce a draft to dismiss — noise, not loss.
-- **The body is what is measured, not the subject.** An out-of-office reply
-  echoes the RFQ subject verbatim, so subject-inclusive measurement let most of
-  them through the very category built to catch them.
-- **Known limit.** A genuine request carrying *no* extractable specification in
-  its body —
-  "please quote the attached drawing", with the detail only in an attachment —
-  and also carrying a junk signal can still be filtered. Where it goes depends on
-  the category: the content categories route to a human queue
-  (`inside_sales_fyi` / `accounts_payable` / `internal_ops`), but the
-  two protocol reports (auto-reply, bounce) route to `no_action`; list mail routes
-  to `inside_sales_fyi` so a human sees it. The sender-address heuristic that made
-  this edge common — treating `no-reply@`/`donotreply@` as an auto-reply, which is
-  how every sourcing portal sends — has been removed. `--no-filter` processes any
-  filtered message. Real RFQ corpora would still sharpen this; it has not been
-  measured against live mail.
-- **Direct, without Astro, the documented sequence runs the gate first.**
-  ```
-  python3 scripts/filter_gate.py --in rfq.eml --state _report/state.json
-  ```
-  Exit `0` → continue with `run_engine.py` then `generate_report.py` as in
-  Quick Start. Exit `3` → stop; nothing else runs. Pass `--no-filter` on the
-  `filter_gate.py` command to force pass-through for a message you know is a
-  real request.
 - **Multi-kit workflows:** feed `case_state.json` to a conversation layer to run
   the customer dialogue (it is designed for exactly that — every open item carries
   a priority and a route), and keep the raw JSON with the case record for audit.

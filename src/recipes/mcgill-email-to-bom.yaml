@@ -20,36 +20,24 @@ phases:
       an operator has already confirmed, `--coc` when the customer requires a
       Certificate of Conformance, `--config-dir DIR` to use an alternate
       rules/catalog directory (e.g. one backed by the ERP item master — this is
-      the supported route to grounded selection), and `--no-filter` to force
-      the input filter (phase 0.5) to pass this message through regardless of
-      its own decision. If no RFQ path is given, print usage and STOP.
+      the supported route to grounded selection). If no RFQ path is given,
+      print usage and STOP.
 
       Step 2 — Verify the file exists and is readable. If not, print the path
       you tried and STOP — do NOT guess at another file, and do NOT invent
       email content.
 
       Step 3 — Create `_report/` and write `_report/state.json` containing an
-      `invocation` object and a `screen` object — and nothing else is needed:
+      `invocation` object — and nothing else is needed:
 
         {"invocation": {"input": "<resolved path>",
                         "component_ids": [<any confirmed IDs>],
                         "coc": <true|false>,
-                        "config_dir": <path or null>},
-         "screen": {"override": <true if --no-filter was given, else false>,
-                    "input": "<the SAME resolved path as invocation.input>"}}
+                        "config_dir": <path or null>}}
 
-      `screen` is NOT part of `invocation` — `--no-filter` is not an engine flag
-      and must never reach `run_engine.py`'s argv (it would put parity at risk).
-
-      `screen.input` is REQUIRED when `override` is true, and must equal
-      `invocation.input`. An override is granted for ONE message: without the
-      path the gate ignores the record, so a stale override cannot silently
-      disable the filter for a different email. Round 28 found the template
-      omitting it, which made the binding inert on this, the only path the
-      recipe actually uses.
-      This record is the ONLY place the run's arguments are written down. Phases
-      0.5 and 1 read it with `--from-state`; you must NOT re-type the flags onto
-      their command lines. Round 26 found that re-typing them here was an
+      This record is the ONLY place the run's arguments are written down. Phase 1
+      reads it with `--from-state`; you must NOT re-type the flags onto
+      its command line. Round 26 found that re-typing them here was an
       unguarded second copy: drop `--coc` while composing phase 1 and both
       artifacts come out perfectly self-consistent and quietly wrong about what
       the customer asked for.
@@ -57,53 +45,9 @@ phases:
       - "Stay in pwd — do NOT cd or create files outside _report/"
       - "Required RFQ path missing → print usage and STOP"
       - "Write EVERY parsed flag into state.json's invocation — later phases read it, not your command lines"
-      - "--no-filter is not an engine flag — record it under state.json's screen, never inside invocation"
-      - "an override MUST carry screen.input equal to invocation.input, or the gate ignores it"
       - "NEVER fabricate or paraphrase email content — the engine reads the raw bytes"
       - "Use python3 for JSON file manipulation"
     input: []
-    output:
-      - _report/state.json
-
-  # ─────────────────────────────────────────────────────────────────────
-  # PHASE 0.5 — Screen the input
-  # ─────────────────────────────────────────────────────────────────────
-  - name: screen_input
-    goal: >
-      Decide whether this message is even worth handing to the engine, BEFORE
-      it runs.
-
-      Use: python3 scripts/filter_gate.py --from-state
-           --state _report/state.json
-
-      This is a deterministic script, not a judgement call for you to make.
-      The whole decision — DSN/auto-reply/bulk-mail/invoice/acknowledgement/
-      internal-chatter detection, and the quoting-request veto that saves a
-      real RFQ carrying junk-shaped headers — lives inside `filter_gate.py`.
-      Your job is to run it and branch on its exit code, nothing else.
-
-      Branch on the exit code ONLY:
-        - `0` — not filtered. Continue to phase 1 exactly as before.
-        - `3` — filtered. STOP the run here. Read the `filter` record the
-          script wrote into `_report/state.json` and report its `code`,
-          `route` and `input` to the requester, in plain language: what kind
-          of message this looked like and why nothing was drafted. Also tell
-          them the documented override — re-run with `--no-filter` — if they
-          believe this is a false positive.
-        - `1` — the gate's own failure (bad usage, unreadable input, unwritable
-          state). This is a loud kit failure, not a filtering outcome. STOP and
-          report the error; do NOT continue to phase 1.
-
-      The gate can never emit `2` — that code belongs to the engine alone and
-      this script never invokes it.
-    constraints:
-      - "NEVER decide yourself whether a message is a request — the script decides, you only branch on its exit code"
-      - "exit 3 is NOT an error and NOT a success — it means there was nothing to quote"
-      - "never treat 2 as anything here — the gate cannot emit it, and if you ever see it something is broken"
-      - "a filtered run produces NO case_state.json and NO bom_draft.md — do not create either by hand"
-      - "do NOT re-type flags from state.json's invocation/screen — use --from-state"
-    input:
-      - _report/state.json
     output:
       - _report/state.json
 
@@ -147,7 +91,6 @@ phases:
     constraints:
       - "ALWAYS use scripts/run_engine.py — NEVER hand-write or edit case_state.json"
       - "Use --from-state — never re-type the flags from phase 0 onto this command"
-      - "If state.json records a filter decision with filtered: true, do NOT invoke run_engine.py — the run ended at screen_input"
       - "engine_exit=2 is normal (draft with open items) — never report it as a failure"
       - "NEVER answer, drop, reword or re-prioritize an open item"
       - "NEVER invent a part number, price, lead time or stock position"

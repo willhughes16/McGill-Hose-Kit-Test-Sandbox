@@ -15,18 +15,6 @@ HERE, once:
                       adding an artifact cannot be forgotten by a clearing site.
   * INVOCATION_KEYS — the engine call's shape. One constructor, one normaliser,
                       one argv builder. A new key is added in one place.
-  * FILTER_KEYS     — the input-filter gate's decision, recorded under
-                      `FILTER_KEY` in state.json. Deliberately NOT an artifact:
-                      a filtered run produces no file at all — its record IS
-                      the state key — so ARTIFACTS/invalidate() are untouched.
-                      Same discipline as INVOCATION_KEYS: one constructor, one
-                      normaliser, read through the declared keys rather than a
-                      hand-written whitelist (R26-F6).
-  * SCREEN_KEY      — the prepare phase's record of the `--no-filter` override,
-                      recorded under `SCREEN_KEY` in state.json. Kept OUT of
-                      INVOCATION_KEYS/build_argv on purpose: it is not an engine
-                      flag, so folding it into the invocation would leak into
-                      the engine argv and put parity at risk.
 
 Invalidation is LOUD. Round 26 (R26-F5) found `except OSError: pass` swallowing
 clearing failures, which reproduced the very defect the clearing exists to
@@ -48,17 +36,6 @@ ARTIFACTS = {
 
 # The engine invocation's shape. Adding an argument means adding it here.
 INVOCATION_KEYS = ("input", "component_ids", "coc", "config_dir")
-
-# The filter gate's decision record, written into state.json under FILTER_KEY.
-# A filtered run produces no ARTIFACTS entry — this key IS its record — so
-# adding a field here never touches ARTIFACTS or invalidate().
-FILTER_KEY = "filter"
-FILTER_KEYS = ("filtered", "input", "code", "route", "evidence", "override", "reason")
-
-# The prepare phase's record of the `--no-filter` override, written into
-# state.json under SCREEN_KEY. Not an engine flag: kept out of INVOCATION_KEYS
-# and build_argv so the engine argv, and therefore parity, never sees it.
-SCREEN_KEY = "screen"
 
 
 class StateError(Exception):
@@ -104,105 +81,6 @@ def build_argv(invocation, as_json):
     if invocation.get("config_dir"):
         argv += ["--config-dir", invocation["config_dir"]]
     return argv
-
-
-def make_filter_decision(filtered, input_path, code=None, route=None,
-                          evidence=None, override=False, reason=None):
-    """Build a filter-gate decision record. The ONLY constructor.
-
-    `filtered` and `input_path` are required — C1 needs to know whether the run
-    stopped here, and C6 needs the input path to replay a false positive.
-    `code`/`route` are `None` on the pass-through path; when set they must come
-    from the closed vocabulary the gate declares (schemas/filter_decision).
-    """
-    return {
-        "filtered": bool(filtered),
-        "input": input_path,
-        "code": code,
-        "route": route,
-        "evidence": evidence,
-        "override": bool(override),
-        "reason": reason,
-    }
-
-
-def normalize_filter_decision(raw):
-    """Coerce a recorded filter decision into the current shape, or return None.
-
-    Reads through FILTER_KEYS rather than a hand-written whitelist, so a key
-    added to the record cannot be silently dropped here (the R26-F6 shape).
-    """
-    if not isinstance(raw, dict) or not raw.get("input"):
-        return None
-    dec = make_filter_decision(bool(raw.get("filtered")), raw["input"])
-    for k in FILTER_KEYS:
-        if k in raw:
-            dec[k] = raw[k]
-    dec["filtered"] = bool(dec.get("filtered"))
-    dec["override"] = bool(dec.get("override"))
-    return dec
-
-
-def _strict_bool(value):
-    """True only for a real boolean true, or an explicit true-ish JSON string.
-
-    Round 27 found `bool(raw.get("override"))` enabled the override for ANY
-    truthy value -- including the STRING "false", which is truthy in Python.
-    An override that disables the only safeguard against a silent drop must be
-    an explicit choice, so anything ambiguous reads as False. Same lesson as the
-    engine's own `approved is not True` check on write-back.
-    """
-    if value is True:
-        return True
-    if isinstance(value, str):
-        return value.strip().lower() in ("true", "yes", "1", "on")
-    return False
-
-
-def make_screen_request(override=False, input_path=None):
-    """Build a screen-override record. The ONLY constructor.
-
-    Records the operator's `--no-filter` choice for the prepare phase to write
-    down once, so later phases read it back instead of the flag being re-typed.
-
-    It carries the input it was granted FOR. Round 27 found the record was never
-    cleared, so an override granted for one message silently governed the next
-    run in the same directory -- disabling the only safeguard against a silent
-    drop without anyone choosing that. Binding it to the input means a stale
-    record cannot apply to a different message; see `screen_applies()`.
-    """
-    return {"override": _strict_bool(override), "input": input_path}
-
-
-def normalize_screen_request(raw):
-    """Coerce a recorded screen request into the current shape, or return None."""
-    if not isinstance(raw, dict):
-        return None
-    return make_screen_request(_strict_bool(raw.get("override")),
-                               raw.get("input"))
-
-
-def screen_applies(screen, input_path):
-    """Whether a recorded override governs THIS message.
-
-    An override with no recorded input is honoured (older records, and the
-    documented `--no-filter` command-line form, which is scoped to its own run
-    by construction). An override recorded for a DIFFERENT input is ignored: it
-    was granted for another message.
-    """
-    if not screen or not screen.get("override"):
-        return False
-    recorded = screen.get("input")
-    if not recorded:
-        # Round 28 (F-3): honouring an input-less record made the binding inert
-        # on the SHIPPED path -- the recipe template wrote {"override": bool}
-        # with no input, while the self-test wrote a shape the recipe never
-        # produced. An override that disables the only safeguard against a
-        # silent drop must say which message it was granted for.
-        return False
-    if not input_path:
-        return False
-    return os.path.abspath(recorded) == os.path.abspath(input_path)
 
 
 def artifact_path(name, **overrides):

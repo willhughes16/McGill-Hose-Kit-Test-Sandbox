@@ -19,12 +19,8 @@ The final deliverable is `_report/case_state.json`, the integration contract, wi
 ## How to run
 
 1. Read `recipes/mcgill-email-to-bom.yaml` — it is the execution contract. Execute its
-   phases **in order** — `prepare` → `screen_input` → `extract_case` →
-   `generate_report`; each phase's `goal`, `constraints`, `input`, and `output`
-   are binding. `screen_input` runs `scripts/filter_gate.py` BEFORE the engine
-   and decides, on exit code alone, whether the run continues (`0`), stops
-   because there is nothing to quote (`3` — not an error), or failed in the
-   gate itself (`1`).
+   phases **in order** — `prepare` → `extract_case` → `generate_report`. Each
+   phase's `goal`, `constraints`, `input` and `output` are binding.
 2. Stay in the current working directory. All runtime output goes under
    `_report/` — never scatter files elsewhere.
 3. Track progress in `_report/state.json` so an interrupted run can resume.
@@ -42,8 +38,7 @@ The final deliverable is `_report/case_state.json`, the integration contract, wi
 `$ARGUMENTS` must contain the **path to one RFQ email** (`.eml` or `.txt`).
 Optional: `--component-ids A B ...` for Component IDs an operator has already
 confirmed, and `--coc` when the customer requires a Certificate of Conformance.
-`--config-dir` selects an alternate rules/catalog directory. `--no-filter`
-forces the input filter (`screen_input`) to pass this message through to the
+`--config-dir` selects an alternate rules/catalog directory.
 engine regardless of its own decision — the documented escape hatch for a
 false positive; it is never an engine flag and never reaches `run_engine.py`'s
 argv.
@@ -80,15 +75,6 @@ line:
 - **Never treat a missing artifact as equivalent to a stale one.** The scripts delete
   a previous run's artifacts before doing anything that can fail, on purpose: no
   artifact is an honest error, a leftover one is a silent wrong answer.
-- **Never decide by hand whether a message is a request.** `screen_input`
-  (`scripts/filter_gate.py`) makes that decision deterministically, before the
-  engine runs. Your job is to run it and branch on its exit code — never judge
-  "does this look like an RFQ" yourself and skip or force a phase on that
-  judgement.
-- **Never treat the gate's `3` as a failure.** It means the message was
-  filtered — nothing to quote, the normal outcome for a bounce, an
-  auto-reply, bulk mail, an invoice, a bare acknowledgement or internal
-  chatter. Only the gate's own non-zero-but-not-3 exit (`1`) is a failure.
 
 ## Deliverables
 
@@ -96,19 +82,13 @@ line:
 |---|---|
 | `_report/case_state.json` | **The email attachment.** The machine contract: fields with statuses and evidence, open items with codes/priorities/routes, request class, routing, knowledge provenance. Conforms to `schemas/case_state.schema.json`. |
 | `_report/bom_draft.md` | Readable draft: BOM table, harness-held checkpoints, operator questions, open items. A **lossy** view of the CaseState — cite the JSON as authoritative. |
-| `_report/state.json` | The run's `invocation` record (written by prepare, read by both later phases) plus the extract result. Also carries the `filter` record written by `screen_input` (`filtered`, `code`, `route`, `evidence`, `override`, `reason`, `input`) — a filtered run's only record, since it produces no other artifact. Not a deliverable. |
+| `_report/state.json` | The run's `invocation` record (written by prepare, read by the later phases) plus the extract result. Not a deliverable. |
 
 ## Reference material
 
 - `schemas/case_state.schema.json` — the CaseState contract: the full open-item
   code vocabulary, the request classes, and the field status/kind/route enums.
   Consult it whenever you need to know what a code means or what values are legal.
-- `schemas/filter_decision.schema.json` — the `filter` record's contract: the
-  closed `code`/`route`/`reason` vocabulary `screen_input` may emit. Consult it
-  to know what a filtered message's code or route means.
-- `reference/filter_signals.json` — the input filter's signal vocabulary
-  (category detectors, cue phrases, thresholds) that `filter_gate.py` reads.
-  Declared once here, never re-expressed in the gate's own code.
 - `vendor/` — the vendored engine and its `config/` (all domain vocabulary lives in
   `config/rules.json`). Read-only. `vendor/PROVENANCE.md` records the exact source
   commit and how to refresh it.

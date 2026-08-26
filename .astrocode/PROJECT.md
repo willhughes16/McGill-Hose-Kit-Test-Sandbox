@@ -318,6 +318,42 @@ ambition, and it is the correct trade: the phase-5 constraint says losing a real
 far worse than passing junk through, and two rounds of measurement showed prose-based
 judgement cannot be made safe.
 
+### Round 30 (blind verification) — FAIL, and the input filter is REMOVED
+
+Round 30 returned **FAIL** and recommended deleting the gate. Phase 5's feature is gone
+as of v0.8.0. The measurements that decided it, from an independent 45-message corpus:
+
+| | Round 29 (v0.6.0) | Round 30 (v0.7.0) |
+|---|---|---|
+| Genuine RFQs dropped | 11/46 (24%) | 13/45 (**28.9%**) |
+| Junk suppressed | not measured | 11/33 (33%) |
+| **Share of all drops that were real customer requests** | — | **54%** |
+| Mutations surviving the suite | 10/24 | **15/34** |
+
+- REQ-057 **The kit does not decide whether a message deserves a quote.** The engine
+  reads the whole message and classifies `out_of_scope` after doing so; it asks rather
+  than assumes. A pre-engine gate has to reach the opposite kind of judgement — "this
+  needs nothing" — without reading properly, and six rounds showed that cannot be made
+  safe here. Three scope reductions each moved the failure surface instead of removing
+  it: a 16-phrase cue list (round 27), a hand-written field tuple with a dead name plus a
+  list-mail exemption (round 28), and content categories plus sender heuristics
+  (round 29). Round 30 still lost 28.9%, with 54% of all drops being real business.
+- REQ-058 **Two builds were published before being blind-verified, and both were
+  dropping customer requests** — v0.4.0 (24/35) and v0.6.0 (11/46). Both were rolled
+  back. Nothing ships from here without a passing blind round, whatever the self-test
+  says.
+- REQ-059 **A fix is not closed until its check has been shown to fail.** Round 30 found
+  R29-F4 recorded as closed in a commit message and in this file while the line was
+  byte-identical — an unasserted string replacement had silently done nothing. Every
+  replacement in a fix pass now asserts its anchor matched, and every new check is
+  mutation-tested before it is claimed.
+
+**What remains:** the engine, vendored verbatim, behind a two-phase recipe (`prepare` →
+`extract_case` → `generate_report`) with the rounds 25–28 wrapper defences — one
+invocation contract, draft/CaseState reconciliation that fails closed, loud stale-artifact
+clearing, clamped exit codes. Those are the parts every blind round has confirmed. The
+28-check self-test covers exactly them.
+
 ## Constraints
 
 - **Never edit `src/vendor/`** to change an outcome. It is a stamped verbatim copy;
