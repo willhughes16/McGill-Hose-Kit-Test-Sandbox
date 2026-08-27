@@ -137,7 +137,17 @@ def main(argv=None):
                    help="state.json to read the invocation from and record into")
     args = p.parse_args(argv)
 
-    paths = artifact_paths(case_state=args.out, bom_draft=args.draft)
+    # A run's artifacts live TOGETHER. Round 35 (M-2): a fixture command that
+    # set only --out left the draft and reply defaults resolving to the CURRENT
+    # directory, so running the parity or golden suite from the kit root deleted
+    # a real run's _report/bom_draft.md and _report/reply.md. Undeclared siblings
+    # now default to --out's own directory, never to the CWD.
+    _out_dir = os.path.dirname(args.out) or "."
+    paths = artifact_paths(
+        case_state=args.out,
+        bom_draft=args.draft or os.path.join(_out_dir,
+                                             os.path.basename(ARTIFACTS["bom_draft"])),
+        reply=os.path.join(_out_dir, os.path.basename(ARTIFACTS["reply"])))
 
     # Resolve the invocation BEFORE clearing anything, so a usage error does not
     # destroy a previous run's artifacts.
@@ -165,7 +175,7 @@ def main(argv=None):
     # state.json as {} in exactly the case where resuming matters. Inputs are
     # not invalidated by a failure to produce outputs.
     try:
-        invalidate(all_artifacts(case_state=args.out, bom_draft=args.draft))
+        invalidate(list(paths.values()))
         if args.state:
             write_state(args.state, {"invocation": invocation},
                         drop=("extract_case",))

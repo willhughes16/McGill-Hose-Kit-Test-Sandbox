@@ -485,6 +485,41 @@ Ten for ten, but **mutation survival fell again: 65% → 39% → 32% (21 of 66)*
   (there is no source counterpart), but three reply mutations survive for want of a
   golden-file regression check. Still outstanding.
 
+### Round 35 (blind verification) — FAIL, the narrowest of the campaign
+
+Eleven for eleven, but converging hard: **mutation survival 32% → 25% (14/55; honest
+real-regression subset 6/55 = 11%)**, CaseState fidelity 12/17 → 13/17 strict (15/17
+shipped-path), and 24 mutations were killed *only* by the new golden suite — it earned its
+place immediately.
+
+- REQ-080 A falsy-value fix is not closed until every sibling filter is fixed. The
+  blocker: the `extraction` section's filter still contained `False` in its drop-tuple
+  after round 34 corrected the identical one in the backstop — the **sixteenth**
+  fix-the-instance-miss-the-sibling, and its casualty was round 34 H-3's own named
+  example, `extraction.material_recognized: False`, hidden from the backstop by
+  `take("extraction")` and swallowed by the filter. Aggravator: the golden suite had
+  **enshrined the defect** — the synthetic fixture carried `material_recognized: false`
+  and the captured expected file lacked it, so fixing the bug turned the golden suite
+  red. Both latent siblings (`class_evidence`, `knowledge` extras) were fixed in the
+  same pass, and the golden baseline re-captured with the diff read line by line (four
+  intended changes, nothing else).
+- REQ-081 A suite run must never touch a real run's artifacts. M-2: fixture commands set
+  only `--out`, so `run_engine`'s sibling defaults resolved to the CURRENT directory and
+  running the parity or golden suite from the kit root deleted `_report/bom_draft.md`
+  and `_report/reply.md`. Undeclared siblings now default to `--out`'s own directory —
+  proven with sentinel files surviving both suites.
+- REQ-082 Ordering is behaviour and needs coverage. M-3: reversing `PRIORITY_ORDER`
+  rendered MUST ACKNOWLEDGE above BLOCKING with every check green. A three-priority
+  synthetic now asserts the order, and the golden synthetic fixture carries two
+  recognized priority groups.
+- REQ-083 `urgency.phrases` — a required schema key — was consumed by `take()` and never
+  rendered (M-1), reaching the page only by coincidence. Now rendered, with every other
+  non-flagged urgency key.
+- Process note: the round-35 fix pass was completed under an intermittent sandbox
+  classifier block on shell commands; the two latent-sibling checks were verified
+  falsifiable by inspection (each mutation removes exactly the line its token lives on)
+  rather than by an executed mutation run. Flagged here so round 36 re-verifies them.
+
 ## Constraints
 
 - **Never edit `src/vendor/`** to change an outcome. It is a stamped verbatim copy;

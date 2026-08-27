@@ -192,7 +192,14 @@ def render(case):
     L.append("DRAFT — not a quote, and not entered in the ERP. A human reviews and "
              "commits this.")
     L.append("")
+    urgency_rec = case.get("urgency") or {}
+    _urg_extra = {k: v for k, v in urgency_rec.items()
+                  if k != "flagged" and v is not None and v != "" and v != [] and v != {}}
     L.append(f"Request type: {_safe(cls)}" + ("   ** URGENT **" if urgent else ""))
+    if _urg_extra:
+        # Round 35 (M-1): urgency.phrases -- a required schema key -- was consumed
+        # by take() and never rendered, reaching the page only by coincidence.
+        L.append("  urgency: " + _safe(json.dumps(_urg_extra, sort_keys=True)))
     blocking = sum(1 for i in items if i.get("priority") == "blocking")
     L.append(f"Open items: {len(items)}"
              + (f" ({blocking} blocking a quote)" if blocking else ""))
@@ -372,13 +379,19 @@ def render(case):
         L.append("")
     take("class_evidence")
     ce = case.get("class_evidence")
-    if ce:
+    if ce is not None and ce != "" and ce != [] and ce != {}:
         L.append(f"Why this request class: {_safe(json.dumps(ce, sort_keys=True) if not isinstance(ce, str) else ce)}")
         L.append("")
     take("extraction")
     extraction = case.get("extraction") or {}
+    # Round 35 (C-1): this filter still contained False after round 34 fixed the
+    # identical one in the backstop -- the sixteenth fix-the-instance-miss-the-
+    # sibling, and its casualty was round 34 H-3's own named example:
+    # extraction.material_recognized: False vanished from the reply entirely,
+    # hidden from the backstop by take("extraction") and swallowed here.
     extra_ex = {k: v for k, v in extraction.items()
-                if v not in (None, "", [], {}, False) and k not in fields}
+                if v is not None and v != "" and v != [] and v != {}
+                and k not in fields}
     if extra_ex:
         L.append("EXTRACTED, NOT IN THE FIELD TABLE")
         L.append("")
@@ -396,6 +409,11 @@ def render(case):
              + (f" (revision {_safe(know.get('revision'))})" if know.get("revision") else ""))
     lookups = know.get("lookups") or []
     L.append(f"  knowledge lookups: {len(lookups)}")
+    _know_extra = {k: v for k, v in know.items()
+                   if k not in ("source", "revision", "lookups")
+                   and v is not None and v != "" and v != [] and v != {}}
+    if _know_extra:
+        L.append("  knowledge (other): " + _safe(json.dumps(_know_extra, sort_keys=True)))
     for lk in lookups:
         L.append(f"    - {_safe(json.dumps(lk, sort_keys=True))}")
     L.append("")

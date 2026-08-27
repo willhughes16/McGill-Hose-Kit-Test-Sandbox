@@ -52,6 +52,11 @@
       "code": "NEW_CODE",
       "priority": "unrecognised_priority",
       "ask": "novel"
+    },
+    {
+      "code": "ACK_ONLY",
+      "priority": "must_acknowledge",
+      "ask": "acknowledge this"
     }
   ],
   "questions": [

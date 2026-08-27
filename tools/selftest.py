@@ -741,6 +741,37 @@ for k in ("a_false_key", "a_zero_key", "a_zero_float"):
           "a falsy key was dropped by the backstop")
 shutil.rmtree(d)
 
+print("Round 35 / M-3 — priorities render highest first, and falsy sub-keys survive")
+d = tempfile.mkdtemp(); os.makedirs(os.path.join(d, "_report"), exist_ok=True)
+cp35 = os.path.join(d, "_report", "case_state.json")
+with open(cp35, "w", encoding="utf-8") as fh:
+    json.dump({"schema_version": "2.0", "request_class": "hose_assembly",
+               "open_items": [
+                   {"code": "ACK1", "priority": "must_acknowledge", "ask": "ack"},
+                   {"code": "BLK1", "priority": "blocking", "ask": "blocked"},
+                   {"code": "CNF1", "priority": "confirm", "ask": "confirm"}],
+               "extraction": {"material_recognized": False},
+               "class_evidence": False,
+               "urgency": {"flagged": False, "phrases": ["need today"]},
+               "fields": {}, "lines": [], "bom_columns": [], "checkpoints": [],
+               "knowledge": {"source": "none",
+                             "kextra": "MUST-APPEAR-KEXTRA"}}, fh)
+rc, _, _ = sh([REPLY, "--case-state", cp35, "--no-reconcile",
+               "--out", "_report/reply.md"], d)
+with open(os.path.join(d, "_report", "reply.md"), encoding="utf-8") as fh:
+    pr = fh.read()
+check("blocking renders above confirm, confirm above must_acknowledge",
+      pr.index("BLK1") < pr.index("CNF1") < pr.index("ACK1"),
+      "the priority ordering regressed with the suite green (round 35, M-3)")
+check("a falsy extraction sub-key survives (round 35 C-1, the 16th sibling)",
+      "material_recognized" in pr)
+check("urgency.phrases reaches the page (round 35, M-1)", "need today" in pr)
+check("a falsy class_evidence still appears (round 35 latent sibling)",
+      "request class" in pr and "False" in pr)
+check("knowledge keys beyond source/revision/lookups appear",
+      "MUST-APPEAR-KEXTRA" in pr)
+shutil.rmtree(d)
+
 print("Round 34 — reply.md is a declared artifact and is cleared like its siblings")
 d = workdir(("A.eml", "confirmed-ids"), ("B.eml", "plain-steam"))
 prepare(d, "A.eml")
