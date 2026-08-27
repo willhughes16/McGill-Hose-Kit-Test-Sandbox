@@ -315,6 +315,16 @@ def render(case):
                     L.append(f"    line {i} also carries: "
                              f"{_safe(json.dumps(extra, sort_keys=True))}")
         else:
+            # Round 36 (C-1), the SEVENTEENTH missed sibling: `bom_columns` is a
+            # required, always-populated key, marked consumed by take() and
+            # rendered only inside _table(...). On the lines==[] branch its six
+            # names appeared NOWHERE, and the backstop could not see the key
+            # because take() had already eaten it -- the same mechanism as round
+            # 35's blocker, one screen away. The columns are what the BOM WOULD
+            # have, so say so rather than printing prose alone.
+            if cols:
+                L.append("  Columns this BOM would carry: "
+                         + _safe(", ".join(str(c) for c in cols)))
             L.append("  (no lines — nothing is grounded enough to draft; see the open "
                      "items above)")
         L.append("")

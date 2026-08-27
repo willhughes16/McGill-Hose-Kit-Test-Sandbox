@@ -78,7 +78,8 @@ phases:
           failure.
         - `open_items[]` is the authoritative list of what is missing, ambiguous
           or unsafe, each with a stable `code`, an `ask`, a `priority`
-          (blocking / confirm / must_acknowledge) and a `route`.
+          (blocking / confirm / must_acknowledge), and a `route` on the items
+          that carry one — most do NOT, so never assume the key is present.
         - `fields{}` carries every field with a status and its evidence. A field
           with status `reading` is NOT captured — the engine deliberately refuses
           to capture ambiguous units, so a `reading` must be confirmed, never

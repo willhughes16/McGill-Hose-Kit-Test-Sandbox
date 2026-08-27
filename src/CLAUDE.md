@@ -87,7 +87,7 @@ line:
 
 | Path | Role |
 |---|---|
-| `_report/reply.md` | **What you send, as the message body.** The whole case inline: request class and urgency, open items grouped by priority with their routes, every field with its status and evidence, the draft BOM, harness-held checkpoints, corrections found in the thread, and knowledge provenance. |
+| `_report/reply.md` | **What you send, as the message body.** The whole case inline: request class and urgency, open items grouped by priority (with a `route` on the items that carry one — it is optional and most do not), every field with its status and evidence, the draft BOM, harness-held checkpoints, corrections found in the thread, and knowledge provenance. |
 | `_report/case_state.json` | The machine contract a conversation layer consumes. Conforms to `schemas/case_state.schema.json`. **Not attached** — cite it, do not send it. |
 | `_report/bom_draft.md` | The engine's own verbatim rendering, byte-identical to what the source engine prints. A **lossy** view kept for parity, not for sending. |
 | `_report/state.json` | The run's `invocation` record (written by prepare, read by the later phases) plus the extract result. Not a deliverable. |

@@ -14,8 +14,9 @@ Given one `.eml` or `.txt` RFQ, it produces:
 
 - **`_report/case_state.json`** — the contract. Every field with a status
   (`captured` / `reading` / `assumed` / `missing` / `conflict` / …) and the evidence
-  behind it; every open item with a stable `code`, an `ask`, a `priority` and a
-  `route`; the request classified (`hose_assembly`, `bulk_hose`, `component_rfq`,
+  behind it; every open item with a stable `code`, an `ask`, a `priority`, and a
+  `route` where one applies (it is optional and absent on most items — read it
+  with a default); the request classified (`hose_assembly`, `bulk_hose`, `component_rfq`,
   `order`, `stocking_lead`, `out_of_scope`); a routing recommendation; and
   knowledge provenance.
 - **`_report/reply.md`** — the reply body, sent inline with **no attachment**:

@@ -159,4 +159,6 @@ order.
   belongs upstream.
 - **Multi-kit workflows:** feed `case_state.json` to a conversation layer to run
   the customer dialogue (it is designed for exactly that — every open item carries
-  a priority and a route), and keep the raw JSON with the case record for audit.
+  a priority, and a route where one applies — `route` is OPTIONAL and absent on
+  most items, so read it with a default rather than indexing it), and keep the
+  raw JSON with the case record for audit.

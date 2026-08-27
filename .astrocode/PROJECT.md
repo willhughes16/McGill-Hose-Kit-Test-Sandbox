@@ -520,6 +520,52 @@ place immediately.
   falsifiable by inspection (each mutation removes exactly the line its token lives on)
   rather than by an executed mutation run. Flagged here so round 36 re-verifies them.
 
+### Round 36 (blind verification) — FAIL, and the first ship under the stopping rule
+
+Twelve for twelve. Mutation survival 43/97 (44%, deliberately over-sampled and said so;
+honest real-regression subset 19/97), CaseState fidelity 15/17 strict and **16/17
+shipped-path**.
+
+**The operator set the stopping rule after this round: ship when no finding would give a
+customer a wrong answer.** v0.14.0 is the first release under it. Applying it per finding:
+
+- REQ-084 **The seventeenth missed sibling.** `bom_columns` — a required, always-populated
+  key — was marked consumed by `take()` and rendered only inside `_table(...)`, so on the
+  `lines == []` branch (any `out_of_scope` message) its six column names appeared nowhere
+  and the backstop could not see the key. Same mechanism as round 35's blocker, one screen
+  away. NOT a wrong-answer finding — static config, absent only from a section that already
+  reads "no lines" — but it falsified the design's stated sentence, so it was fixed and is
+  now verified by `tools/completeness.py`.
+- REQ-085 **The structural guard round 36's K-3 asked for.** `tools/completeness.py`
+  asserts every non-empty CaseState key and every leaf value reaches the reply, over a
+  pairwise cross-product of 14 axes (184 combinations, VIOLATIONS: 0). The golden suite
+  compares BYTES and so froze the *absence* of a branch; this property check found the
+  blocker in seconds. Its own first run reported six false positives (nested dict key
+  names) — corrected by drawing the line at vocabulary vs content, documented in the file.
+- REQ-086 **H-2 was the one wrong-answer finding, and round 35's own fix caused it.** The
+  M-2 fix scoped clearing to `--out`'s directory, which stopped the suites deleting the
+  kit root's `_report/` and thereby reintroduced R26-F1: with `--out` redirected, customer
+  A's `reply.md` survived beside customer B's CaseState, so an operator could send A's
+  draft answering B. Clearing now iterates the **ARTIFACTS declaration** across the union
+  of `--out`'s and `--state`'s directories — both halves load-bearing, and the first cut of
+  this fix lost the declaration half and broke R27-F4 (caught by the suite, not by
+  inspection). Permanent coverage added; nothing had covered it before.
+- REQ-087 **Four false `route` claims.** The recipe, README, EXAMPLES and CLAUDE.md all
+  stated every open item carries a `route`; **23 of 24** in the parity fixtures do not, and
+  EXAMPLES made it load-bearing for the conversation layer, which would `KeyError`.
+
+### Shipped with these coverage gaps open (round 36, next cycle)
+
+Under the stopping rule these do not block: the shipped code is correct today and none
+would give a customer a wrong answer. They are IOUs, not unknowns.
+
+1. **6 of 10 `UNCONFIRMED` members are deletable with the suite green** — one live on a
+   plain camlock email. The sharpest of these: a future edit could un-mark a field the
+   engine refused to confirm, undetected. **Fix first next cycle.**
+2. `write_state` swallowing `OSError` exits **0** with no state record.
+3. An engine failure leaves a **0-byte** `case_state.json`.
+4. The *falsy* knowledge-extras variant cannot fail (one layer below a check that can).
+
 ## Constraints
 
 - **Never edit `src/vendor/`** to change an outcome. It is a stamped verbatim copy;

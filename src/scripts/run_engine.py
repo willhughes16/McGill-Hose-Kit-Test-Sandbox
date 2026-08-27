@@ -142,12 +142,46 @@ def main(argv=None):
     # directory, so running the parity or golden suite from the kit root deleted
     # a real run's _report/bom_draft.md and _report/reply.md. Undeclared siblings
     # now default to --out's own directory, never to the CWD.
-    _out_dir = os.path.dirname(args.out) or "."
-    paths = artifact_paths(
-        case_state=args.out,
-        bom_draft=args.draft or os.path.join(_out_dir,
-                                             os.path.basename(ARTIFACTS["bom_draft"])),
-        reply=os.path.join(_out_dir, os.path.basename(ARTIFACTS["reply"])))
+    # A run is identified by BOTH --out and --state, so its artifacts may live in
+    # either directory and every one of them must be cleared. Round 35 (M-2)
+    # scoped clearing to --out's directory, which stopped the suites deleting the
+    # kit root's _report/ -- and round 36 (H-2) then found the other half: with
+    # --out redirected, the run's OWN _report/reply.md (named by --state's
+    # directory) survived beside a new CaseState. R26-F1, reintroduced by its own
+    # fix. Clearing the union closes both: a suite passes both flags into its
+    # fixture directory and never reaches the CWD, while a real run clears
+    # everything it owns.
+    _dirs = []
+    for _p in (args.out, args.state):
+        if _p:
+            _d = os.path.dirname(_p) or "."
+            if _d not in _dirs:
+                _dirs.append(_d)
+    paths = artifact_paths(case_state=args.out,
+                           bom_draft=args.draft or os.path.join(
+                               _dirs[0], os.path.basename(ARTIFACTS["bom_draft"])))
+    # EVERY DECLARED artifact, in EVERY directory this run touches. Both halves
+    # are load-bearing and a previous attempt at this lost one of them:
+    #
+    #   * driven by ARTIFACTS (not a hand-written name list) so a newly declared
+    #     artifact is cleared with no call site edited -- R27-F4 / REQ-047, which
+    #     the first cut of this fix silently broke;
+    #   * across --out's AND --state's directories so nothing the run owns is
+    #     left behind -- round 36 H-2 / R26-F1, which the round-35 fix broke.
+    #
+    # Iterating the declaration over the directories satisfies both; picking
+    # either one alone has now failed once each.
+    _sibling_paths = []
+    for _d in _dirs:
+        for _name in ARTIFACTS:
+            if _name == "case_state":
+                continue          # --out names it explicitly, below
+            _cand = os.path.join(_d, os.path.basename(ARTIFACTS[_name]))
+            if _cand not in _sibling_paths:
+                _sibling_paths.append(_cand)
+    for _explicit in (args.draft,):
+        if _explicit and _explicit not in _sibling_paths:
+            _sibling_paths.append(_explicit)
 
     # Resolve the invocation BEFORE clearing anything, so a usage error does not
     # destroy a previous run's artifacts.
@@ -175,7 +209,7 @@ def main(argv=None):
     # state.json as {} in exactly the case where resuming matters. Inputs are
     # not invalidated by a failure to produce outputs.
     try:
-        invalidate(list(paths.values()))
+        invalidate([args.out] + _sibling_paths)
         if args.state:
             write_state(args.state, {"invocation": invocation},
                         drop=("extract_case",))

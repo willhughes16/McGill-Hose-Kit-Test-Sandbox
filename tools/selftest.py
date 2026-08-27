@@ -772,6 +772,33 @@ check("knowledge keys beyond source/revision/lookups appear",
       "MUST-APPEAR-KEXTRA" in pr)
 shutil.rmtree(d)
 
+print("Round 36 / H-2 — a new extraction clears the run's artifacts in EVERY "
+      "directory it touches, including when --out is redirected")
+# Round 35's M-2 fix scoped clearing to --out's directory, which stopped the
+# suites deleting the kit root's _report/ -- and thereby reintroduced R26-F1:
+# with --out redirected, customer A's reply survived beside customer B's
+# CaseState, so an operator could send A's draft answering B. That is a
+# wrong-answer-to-a-customer defect, and NOTHING covered it. Both halves are
+# asserted here: the union of directories, and the ARTIFACTS declaration.
+d = workdir(("A.eml", "confirmed-ids"), ("B.eml", "plain-steam"))
+os.makedirs(os.path.join(d, "other"), exist_ok=True)
+prepare(d, "A.eml")
+phase1(d, "A.eml")
+phase2(d)
+sh([REPLY, "--state", "_report/state.json"], d)
+check("customer A's reply and draft exist after A's run",
+      "reply.md" in artifacts(d) and "bom_draft.md" in artifacts(d),
+      f"artifacts={artifacts(d)}")
+# B's extraction, with the CaseState redirected out of _report/ entirely.
+rc, _, err = sh([RUN, "--in", "B.eml", "--state", "_report/state.json",
+                 "--out", os.path.join("other", "case_state.json")], d)
+check("B's extraction succeeds with --out redirected", rc == 0, err.strip()[:90])
+check("customer A's stale REPLY did not survive B's extraction",
+      "reply.md" not in artifacts(d), f"artifacts={artifacts(d)}")
+check("customer A's stale DRAFT did not survive B's extraction",
+      "bom_draft.md" not in artifacts(d), f"artifacts={artifacts(d)}")
+shutil.rmtree(d)
+
 print("Round 34 — reply.md is a declared artifact and is cleared like its siblings")
 d = workdir(("A.eml", "confirmed-ids"), ("B.eml", "plain-steam"))
 prepare(d, "A.eml")
