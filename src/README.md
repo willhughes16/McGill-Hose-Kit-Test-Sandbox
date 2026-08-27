@@ -45,6 +45,7 @@ phase scripts with `python3` (no install, no dependencies):
 ```
 python3 scripts/run_engine.py --in rfq.eml --out _report/case_state.json --state _report/state.json
 python3 generate_report.py --out _report/bom_draft.md --state _report/state.json
+python3 scripts/render_reply.py --out _report/reply.md --state _report/state.json
 ```
 
 

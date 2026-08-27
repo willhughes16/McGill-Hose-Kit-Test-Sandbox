@@ -16,6 +16,7 @@ Directly, without Astro (the kit ships no console script):
 ```
 python3 scripts/run_engine.py --in rfq.eml --out _report/case_state.json --state _report/state.json
 python3 generate_report.py --out _report/bom_draft.md --state _report/state.json
+python3 scripts/render_reply.py --out _report/reply.md --state _report/state.json
 ```
 
 ## Examples
@@ -34,7 +35,7 @@ python3 generate_report.py --out _report/bom_draft.md --state _report/state.json
    the request is summarised: what was understood, what must be answered, where
    to route it.
 
-**Produces:** `_report/case_state.json`, `_report/bom_draft.md`
+**Produces:** `_report/reply.md` (what you send), `_report/case_state.json`, `_report/bom_draft.md`
 
 For the shipped sample (a 4in EPDM suction hose assembly, couplers named but no
 size/temperature stated) the engine classifies it `hose_assembly`, drafts no BOM
@@ -100,7 +101,7 @@ run normally. The engine returns `request_class: out_of_scope` with a single
 to quote and where the message should go instead.
 
 **Produces:** `_report/case_state.json`, `_report/reply.md`, `_report/bom_draft.md`
-— the same three artifacts as any other run, with an empty BOM table.
+— the same artifacts as any other run, with an empty BOM table.
 
 A previous version screened such messages out before the engine ran. That was
 removed: measured against a 45-message corpus it discarded 13 genuine RFQs, and
@@ -146,7 +147,7 @@ order.
   `generate_report` (it re-derives the CaseState to reconcile before rendering),
   and one in `render_reply` (which reconciles too, so the reply cannot describe a
   different case than the CaseState). Budget roughly **4x** the single-pass
-  figures: ~5 minutes end to end at 538 KB, not 80 s. Both scripts warn on stderr above 100 KB. The per-pass cost is
+  figures: ~5 minutes end to end at 538 KB, not 80 s. All three scripts warn on stderr above 100 KB. The per-pass cost is
   inherited from the engine and truncating input would be worse than being slow,
   so trim quoted history if you need speed.
 - **Two schema values the engine cannot emit.** `schemas/case_state.schema.json`

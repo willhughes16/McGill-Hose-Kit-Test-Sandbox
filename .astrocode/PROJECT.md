@@ -448,6 +448,43 @@ PYTHONHASHSEED pairs, absolute paths and an alternate `--config-dir` all reconci
   passed either way — the same coincidence-match that round 32 found. Markers now sit in
   the truncation tail.
 
+### Round 34 (blind verification) — FAIL, and the blocker was fabrication
+
+Ten for ten, but **mutation survival fell again: 65% → 39% → 32% (21 of 66)**, and round 34
+**refuted** one of the four weaknesses named on its bar (the synthetic block's
+`--no-reconcile` is adequately compensated) while confirming three.
+
+- REQ-073 Whitespace FOLDS, it never vanishes. The blocker: round 33's category rewrite ran
+  the strip before the whitespace fold, and `\n` is `Cc`, so `"temperature\n250"` rendered
+  as `temperature250` — a token present in no email, printed in the Evidence column whose
+  entire purpose is to be the customer's verbatim span. It **fabricates rather than loses**,
+  with no marker, on a plain message with no hostile intent, and the recipe sends that body
+  verbatim. `Cc/Zl/Zp` now fold to a space; only `Cf/Cs/Co/Cn` are removed. Legitimate
+  non-Latin script is preserved (verified: Arabic survives, bidi overrides do not) — the
+  correctness/security trade the bar asked about lands the right way.
+- REQ-074 Every truncated cell has an in-full backstop. H-1: the Value cell got one in
+  round 33 and the Evidence cell in the SAME `rows.append(...)` call did not — the
+  fourteenth missed-sibling — losing `1450.75 psig`, half of the conflict blocking a quote.
+  The four-fixture check also explicitly skipped `evidence`.
+- REQ-075 Consumption is tracked, not declared. H-2: the hand-written `_consumed` set was
+  wrong in six places, and a key listed there but not rendered was silently absent AND
+  excluded from the backstop — worse than having no backstop. Sections now mark their own
+  keys as they render, so the set cannot drift from what is emitted.
+- REQ-076 A falsy value is information. H-3: `v not in (None, "", [], {}, False)` dropped
+  every False-valued key and, since `0 == False`, every `0` and `0.0` —
+  `extraction.material_recognized: False` was a shipped-path casualty.
+- REQ-077 Never claim a count the page cannot show. H-4: with an alternate `--config-dir`
+  supplying no `bom_columns`, the reply printed `Draft BOM lines: 2` and then no BOM
+  section and no part numbers. Columns now fall back to the keys the lines carry.
+- REQ-078 An absolute claim about content must be true of the content. H-5: the footer
+  asserted no price appears anywhere above — false in plain ASCII whenever the customer's
+  own question mentions one. It now distinguishes what the ENGINE produces from what the
+  customer is quoted saying.
+- REQ-079 A regression golden for `reply.md` is needed and is NOT circular. Round 34
+  adjudicated the author's reasoning as half right: a *parity* fixture is correctly absent
+  (there is no source counterpart), but three reply mutations survive for want of a
+  golden-file regression check. Still outstanding.
+
 ## Constraints
 
 - **Never edit `src/vendor/`** to change an outcome. It is a stamped verbatim copy;

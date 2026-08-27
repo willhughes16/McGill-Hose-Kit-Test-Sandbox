@@ -80,7 +80,17 @@ _ANSI = re.compile(
 #   Cc control · Cf format (bidi overrides, isolates, ZWJ/ZWNJ, soft hyphen,
 #   BOM) · Cs surrogate · Co private use · Cn unassigned · Zl/Zp line and
 #   paragraph separators.
-_STRIP_CATEGORIES = frozenset({"Cc", "Cf", "Cs", "Co", "Cn", "Zl", "Zp"})
+_STRIP_CATEGORIES = frozenset({"Cf", "Cs", "Co", "Cn"})
+
+# Categories that are WHITESPACE-LIKE and must fold to a space rather than
+# vanish. Round 34 (C-1) found the round-33 rewrite deleting them: the category
+# strip ran before the whitespace fold, and `\n` is `Cc`, so "temperature\n250"
+# rendered as "temperature250" -- a token that appears in no email, printed in
+# the Evidence column whose whole purpose is to be the customer's verbatim span.
+# That FABRICATES rather than loses, with no marker, on a plain email with no
+# hostile intent. Deleting a character that separates words is never safe;
+# folding it is.
+_FOLD_CATEGORIES = frozenset({"Cc", "Zl", "Zp"})
 
 
 def _safe(value, limit=None):
@@ -88,9 +98,13 @@ def _safe(value, limit=None):
 
     Everything the engine echoes back -- evidence spans, ask text, the captured
     customer name, notes -- originates in an email. It is DATA. This strips
-    control characters (including ANSI escapes), folds newlines and tabs to
-    spaces, and collapses runs, so a rendered value occupies exactly one line and
-    cannot imitate the document's own structure.
+    format/private/unassigned characters (including ANSI escapes and bidi
+    overrides), FOLDS every whitespace-like character -- newlines, tabs, vertical
+    tabs, line and paragraph separators -- to a space, and collapses runs. A
+    rendered value occupies exactly one line and cannot imitate the document's
+    own structure. Folding rather than deleting matters: round 34 found the
+    delete-first version turning "temperature\n250" into "temperature250", a
+    token present in no email.
     """
     text = "" if value is None else str(value)
     # Strip WHOLE escape sequences, not just the ESC byte. Removing only the
@@ -98,8 +112,10 @@ def _safe(value, limit=None):
     # confusing noise that still reads as though the kit emitted it.
     text = _ANSI.sub("", text)
     text = text.replace("\t", " ")
-    text = "".join(ch for ch in text
-                   if unicodedata.category(ch) not in _STRIP_CATEGORIES)
+    text = "".join(
+        " " if unicodedata.category(ch) in _FOLD_CATEGORIES else ch
+        for ch in text
+        if unicodedata.category(ch) not in _STRIP_CATEGORIES)
     text = " ".join(text.split())
     if limit and len(text) > limit:
         text = text[: limit - 1] + "…"
@@ -158,6 +174,16 @@ def _open_item(it, show_priority=False):
 def render(case):
     """Build the reply body. Pure function of the CaseState."""
     L = []
+    # Keys this run actually rendered. Round 34 (H-2) found the previous
+    # hand-written `_consumed` list wrong in six places -- each of those keys was
+    # both absent from the page AND excluded from the backstop, which is worse
+    # than having no backstop. A section marks its own key as it renders it, so
+    # the two cannot drift apart.
+    consumed = set()
+
+    def take(*keys):
+        consumed.update(keys)
+    take("request_class", "urgency", "open_items", "lines", "bom_columns")
     cls = case.get("request_class") or "unclassified"
     urgent = bool((case.get("urgency") or {}).get("flagged"))
     items = case.get("open_items") or []
@@ -175,9 +201,11 @@ def render(case):
     # from a C-of-C request is the one that matters. Round 32 pre-flight found it
     # dropped entirely, which for a certificate requirement is exactly the kind
     # of silent omission this kit exists to prevent.
+    take("classes")
     classes = case.get("classes") or []
     if classes:
         L.append("Applies: " + _safe(", ".join(str(c) for c in classes)))
+    take("routing")
     routing = case.get("routing") or {}
     if routing:
         who = routing.get("recommendation")
@@ -213,6 +241,7 @@ def render(case):
             L.append("")
 
     # ---- what the engine understood, with evidence ---------------------------
+    take("fields")
     fields = case.get("fields") or {}
     if fields:
         rows = []
@@ -240,8 +269,11 @@ def render(case):
                 # is fine; losing the data is not.
                 long_values.append((name, full))
             mark = "" if status not in UNCONFIRMED else "  <-- NOT CONFIRMED"
-            rows.append([_safe(name), value, _safe(status) + mark,
-                         _safe(f.get("evidence"), 48)])
+            ev_full = _safe(f.get("evidence"))
+            ev = ev_full if len(ev_full) <= 48 else ev_full[:47] + "…"
+            if ev != ev_full:
+                long_values.append((f"{name} evidence", ev_full))
+            rows.append([_safe(name), value, _safe(status) + mark, ev])
         L.append("WHAT THE EMAIL SAID")
         L.append("")
         L.append(_table(rows, ["Field", "Value", "Status", "Evidence"]))
@@ -256,7 +288,12 @@ def render(case):
 
     # ---- the draft BOM -------------------------------------------------------
     cols = case.get("bom_columns") or []
-    if cols:
+    if lines and not cols:
+        # Round 34 (H-4): an alternate --config-dir can supply no bom_columns,
+        # and the header still counts the lines. Never claim a count and then
+        # show nothing: fall back to every key the lines actually carry.
+        cols = sorted({k for l in lines for k in l})
+    if cols or lines:
         L.append("DRAFT BILL OF MATERIALS")
         L.append("")
         if lines:
@@ -276,6 +313,7 @@ def render(case):
         L.append("")
 
     # ---- checkpoints, notes, supersedes, provenance --------------------------
+    take("checkpoints")
     cps = case.get("checkpoints") or []
     if cps:
         L.append("CHECKPOINTS — each requires a human, and none can be actioned here")
@@ -290,6 +328,7 @@ def render(case):
                 if c[k] not in (None, "", [], {}):
                     L.append(f"      {_safe(k)}: {_safe(c[k])}")
         L.append("")
+    take("notes")
     notes = case.get("notes") or []
     if notes:
         L.append("NOTES")
@@ -297,6 +336,7 @@ def render(case):
         for n in notes:
             L.append(f"  - {_safe(n)}")
         L.append("")
+    take("supersedes")
     sup = case.get("supersedes") or []
     if sup:
         L.append("CORRECTIONS IN THE THREAD — a later message overrode an earlier value")
@@ -305,6 +345,7 @@ def render(case):
             L.append("  - " + _safe(sp if isinstance(sp, str)
                                     else json.dumps(sp, sort_keys=True)))
         L.append("")
+    take("logged_attempts")
     logged = case.get("logged_attempts") or []
     if logged:
         L.append("OUT-OF-CLASS ATTEMPTS (logged, not acted on)")
@@ -319,6 +360,7 @@ def render(case):
     # was a superset. Rather than adding three named keys and waiting for round 34
     # to name the next, everything rendered above is tracked and ANY unconsumed
     # top-level key is printed below. A key cannot be silently absent.
+    take("questions")
     qs = case.get("questions") or []
     if qs:
         L.append("RULES THAT FIRED (the engine's own question record)")
@@ -328,10 +370,12 @@ def render(case):
             txt = q.get("text") if isinstance(q, dict) else q
             L.append(f"  - {_safe(txt)}" + (f"   ({_safe(rid)})" if rid else ""))
         L.append("")
+    take("class_evidence")
     ce = case.get("class_evidence")
     if ce:
         L.append(f"Why this request class: {_safe(json.dumps(ce, sort_keys=True) if not isinstance(ce, str) else ce)}")
         L.append("")
+    take("extraction")
     extraction = case.get("extraction") or {}
     extra_ex = {k: v for k, v in extraction.items()
                 if v not in (None, "", [], {}, False) and k not in fields}
@@ -342,9 +386,11 @@ def render(case):
             L.append(f"  {_safe(k)}: {_safe(json.dumps(extra_ex[k], sort_keys=True) if isinstance(extra_ex[k], (list, dict)) else extra_ex[k])}")
         L.append("")
 
+    take("knowledge")
     know = case.get("knowledge") or {}
     L.append("PROVENANCE")
     L.append("")
+    take("schema_version")
     L.append(f"  schema_version: {_safe(case.get('schema_version'))}")
     L.append(f"  knowledge source: {_safe(know.get('source'))}"
              + (f" (revision {_safe(know.get('revision'))})" if know.get("revision") else ""))
@@ -356,12 +402,13 @@ def render(case):
     # The completeness backstop. Anything the CaseState carries and the sections
     # above did not consume is printed verbatim, so "all the information" is a
     # property of the renderer rather than a claim about it.
-    _consumed = {"schema_version", "request_class", "urgency", "classes", "routing",
-                 "open_items", "questions", "class_evidence", "extraction",
-                 "fields", "bom_columns", "lines", "checkpoints", "notes",
-                 "supersedes", "logged_attempts", "knowledge"}
+    # `is None` and explicit empties only. Round 34 (H-3): `v not in (..., False)`
+    # dropped every key valued False, and since 0 == False in Python, 0 and 0.0
+    # as well -- `extraction.material_recognized: False` vanished on the shipped
+    # path. A false value is information.
     leftover_keys = {k: v for k, v in case.items()
-                     if k not in _consumed and v not in (None, "", [], {}, False)}
+                     if k not in consumed and v is not None
+                     and v != "" and v != [] and v != {}}
     if leftover_keys:
         L.append("")
         L.append("ALSO IN THE CASE RECORD (not covered by a section above)")
@@ -371,8 +418,13 @@ def render(case):
             L.append(f"  {_safe(k)}: "
                      f"{_safe(json.dumps(v, sort_keys=True) if isinstance(v, (list, dict)) else v)}")
     L.append("")
-    L.append("No price, lead time or stock position appears above: the engine produces "
-             "none.")
+    # Round 34 (H-5): this used to assert absolutely that no price appears --
+    # false whenever the customer's own words, echoed in an ask or an evidence
+    # span, mention one. The engine produces none; the page may still quote the
+    # customer asking. Say exactly that.
+    L.append("The ENGINE produces no price, lead time or stock position, and none of the")
+    L.append("above is one. Where a figure appears it is the customer's own words quoted")
+    L.append("back — treat it as their claim, not as our number.")
     L.append("Pricing and availability questions are routed to a human, never answered "
              "here.")
     return "\n".join(L).rstrip() + "\n"

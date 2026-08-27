@@ -651,6 +651,108 @@ check("R-ZZZ rule id reaches the reply", "R-ZZZ" in h)
 shutil.rmtree(d)
 
 
+
+print("Round 34 — the blocker: whitespace must FOLD, never vanish")
+# _safe() deleted newlines instead of folding them, so "temperature\n250" printed
+# as "temperature250" -- a token in no email, in the column that exists to be the
+# customer's verbatim span. Fabrication, not loss, on a plain message.
+sys.path.insert(0, os.path.join(ROOT, "src", "scripts"))
+import render_reply as _rr  # noqa: E402
+for raw, want in [("temperature\n250", "temperature 250"),
+                  ("a\r\nb", "a b"),
+                  ("x\u2028y", "x y"),
+                  ("tab\there", "tab here"),
+                  ("a\x0bb", "a b")]:
+    got = _rr._safe(raw)
+    check(f"{raw!r} folds to {want!r}", got == want, f"got {got!r}")
+check("a bidi override is still removed", "\u202e" not in _rr._safe("\u202eX"))
+check("legitimate non-Latin script is preserved",
+      "مرحبا" in _rr._safe("hello مرحبا"))
+
+print("Round 34 — the evidence cell has the same in-full backstop as the value")
+d = tempfile.mkdtemp(); os.makedirs(os.path.join(d, "_report"), exist_ok=True)
+LONG_EV = "conflicting: 150 psi stated here and then " + "z" * 30 + " 1450.75 psig"
+cp34 = os.path.join(d, "_report", "case_state.json")
+with open(cp34, "w", encoding="utf-8") as fh:
+    json.dump({"schema_version": "2.0", "request_class": "hose_assembly",
+               "fields": {"pressure": {"value": "conflict", "status": "conflict",
+                                       "evidence": LONG_EV}},
+               "notes": ["MUST-APPEAR-NOTE"],
+               "knowledge": {"source": "none",
+                             "lookups": [{"op": "MUST-APPEAR-LOOKUP"}]},
+               "open_items": [], "lines": [], "bom_columns": [],
+               "checkpoints": []}, fh)
+rc, _, err = sh([REPLY, "--case-state", cp34, "--no-reconcile",
+                 "--out", "_report/reply.md"], d)
+check("the long-evidence CaseState renders", rc == 0, err.strip()[:90])
+with open(os.path.join(d, "_report", "reply.md"), encoding="utf-8") as fh:
+    ev = fh.read()
+check("the full evidence span is recoverable, not truncated away",
+      "1450.75 psig" in ev, "the tail of a conflict span was lost")
+check("notes reach the reply", "MUST-APPEAR-NOTE" in ev)
+check("knowledge lookups reach the reply", "MUST-APPEAR-LOOKUP" in ev)
+shutil.rmtree(d)
+
+print("Round 34 — a bom_columns-less CaseState never claims a count it cannot show")
+d = tempfile.mkdtemp(); os.makedirs(os.path.join(d, "_report"), exist_ok=True)
+cp = os.path.join(d, "_report", "case_state.json")
+with open(cp, "w", encoding="utf-8") as fh:
+    json.dump({"schema_version": "2.0", "request_class": "order",
+               "bom_columns": [], "lines": [{"Part": "MUST-APPEAR-PART"},
+                                            {"Part": "MUST-APPEAR-PART2"}],
+               "fields": {}, "open_items": [], "checkpoints": [],
+               "knowledge": {"source": "none"}}, fh)
+rc, _, _ = sh([REPLY, "--case-state", cp, "--no-reconcile",
+               "--out", "_report/reply.md"], d)
+with open(os.path.join(d, "_report", "reply.md"), encoding="utf-8") as fh:
+    nb = fh.read()
+# Assert the parts appear in the BOM TABLE, not merely somewhere on the page:
+# the "also carries" fallback line prints off-column keys too, so a page-wide
+# search passes even when the table is empty (round 34's coincidence shape).
+# A single-column table has no "|" separator, so match on the token being a
+# LINE of the BOM section rather than on a separator character.
+_bom = nb.split("DRAFT BILL OF MATERIALS", 1)[-1].split("PROVENANCE", 1)[0]
+_table_rows = [l for l in _bom.splitlines()
+               if l.strip().startswith("MUST-APPEAR-PART")]
+check("the lines appear as BOM TABLE ROWS, not just somewhere on the page",
+      len(_table_rows) >= 2, f"table rows found: {len(_table_rows)}")
+check("the header count matches the rows shown",
+      "Draft BOM lines: 2" in nb and len(_table_rows) == 2,
+      f"rows={len(_table_rows)}")
+shutil.rmtree(d)
+
+print("Round 34 — a key valued False or 0 is information, not absence")
+# `v not in (None, "", [], {}, False)` dropped every False-valued key, and since
+# 0 == False in Python, 0 and 0.0 too. extraction.material_recognized: False was
+# a shipped-path casualty of exactly that.
+d = tempfile.mkdtemp(); os.makedirs(os.path.join(d, "_report"), exist_ok=True)
+cpf = os.path.join(d, "_report", "case_state.json")
+with open(cpf, "w", encoding="utf-8") as fh:
+    json.dump({"schema_version": "2.0", "request_class": "order",
+               "a_false_key": False, "a_zero_key": 0, "a_zero_float": 0.0,
+               "fields": {}, "lines": [], "bom_columns": [], "open_items": [],
+               "checkpoints": [], "knowledge": {"source": "none"}}, fh)
+rc, _, _ = sh([REPLY, "--case-state", cpf, "--no-reconcile",
+               "--out", "_report/reply.md"], d)
+with open(os.path.join(d, "_report", "reply.md"), encoding="utf-8") as fh:
+    fz = fh.read()
+for k in ("a_false_key", "a_zero_key", "a_zero_float"):
+    check(f"{k} (a falsy value) still reaches the reply", k in fz,
+          "a falsy key was dropped by the backstop")
+shutil.rmtree(d)
+
+print("Round 34 — reply.md is a declared artifact and is cleared like its siblings")
+d = workdir(("A.eml", "confirmed-ids"), ("B.eml", "plain-steam"))
+prepare(d, "A.eml")
+phase1(d, "A.eml")
+sh([REPLY, "--state", "_report/state.json"], d)
+check("a reply exists after a good run", "reply.md" in artifacts(d))
+phase1(d, "B.eml")            # a new extraction invalidates the whole run
+check("a new extraction clears the previous reply",
+      "reply.md" not in artifacts(d), f"artifacts={artifacts(d)}")
+shutil.rmtree(d)
+
+
 failed = [r for r in results if not r[1]]
 print(f"\n{len(results) - len(failed)}/{len(results)} defences held")
 if failed:
