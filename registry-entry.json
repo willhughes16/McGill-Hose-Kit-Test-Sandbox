@@ -60,7 +60,7 @@
   },
   "estimated_duration": "seconds for a typical email; minutes for a very large thread (>100 KB)",
   "download_url": "",
-  "sha256": "eabc86763a60514ea0fd204f1b15923cab7144c960a7388c9ad0ab285c420373",
+  "sha256": "485906093a43ab90b1bbb987676b2213a03f53544b54edc664f38ba874c615cd",
   "contract_version": "^1.0.0",
   "manifest_version": 4
 }

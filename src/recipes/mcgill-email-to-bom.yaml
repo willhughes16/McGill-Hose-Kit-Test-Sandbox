@@ -148,6 +148,7 @@ phases:
       - "ALWAYS use the script — NEVER generate the deliverable by hand"
       - "If the script fails, debug and fix it — do NOT create the artifact manually"
       - "A reconciliation failure means the draft would contradict the CaseState — re-run phase 1, never bypass it"
+      - "NEVER pass --no-reconcile to generate_report.py OR render_reply.py in a real run — it disables the only check that the artifact a human reads describes the same case as the machine record"
       - "NEVER present the draft as a quote, a confirmed BOM, or a committed order"
       - "NEVER state a price, a lead time or a stock position the engine did not produce"
       - "Report every open item — do NOT summarise them away or judge them minor"

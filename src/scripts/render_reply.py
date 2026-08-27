@@ -39,7 +39,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
-from run_engine import run_engine  # noqa: E402  (ONE argv builder)
+from run_engine import run_engine, warn_if_slow  # noqa: E402
 from run_state import (  # noqa: E402
     ARTIFACTS, StateError, artifact_path, invalidate, normalize_invocation,
     read_state,
@@ -431,6 +431,10 @@ def main(argv=None):
                   "extract phase first, or pass --no-reconcile to render an "
                   "unchecked reply.", file=sys.stderr)
             return 1
+        # The fourth engine pass of a run, and it had no size warning while the
+        # other three did (round 33). An operator watching a large thread should
+        # be told why this step is slow too.
+        warn_if_slow(invocation["input"], passes=1)
         try:
             replayed = json.loads(run_engine(invocation, as_json=True)[0])
         except RuntimeError as e:

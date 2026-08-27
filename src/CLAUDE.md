@@ -68,10 +68,12 @@ line:
   Say it needs confirming.
 - **Never edit `vendor/`** to change an outcome. It is a stamped verbatim copy; see
   `vendor/PROVENANCE.md` before touching it.
-- **Never bypass a reconciliation failure.** If `generate_report.py` refuses because
-  the draft would not describe the same case as `case_state.json`, re-run the extract
-  phase. Do NOT pass `--no-reconcile` to get past it and do NOT write the draft by
-  hand — the refusal is the safety net doing its job.
+- **Never bypass a reconciliation failure.** `generate_report.py` AND
+  `render_reply.py` both re-derive the CaseState and refuse if it differs. If
+  either refuses, re-run the extract phase. Do NOT pass `--no-reconcile` to
+  either one and do NOT write the artifact by hand — the refusal is the safety
+  net doing its job, and for the reply it is the only thing standing between an
+  operator and a confident document describing a different case.
 - **Never attach a file to the reply.** The kit declares no `email_attachment`:
   the case goes in the body. Attaching `case_state.json` would send an operator to
   read JSON for information the reply already states in words.
