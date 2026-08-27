@@ -86,7 +86,7 @@ quietly wrong.**
 | `vendor/` | The engine, **vendored verbatim** — see `vendor/PROVENANCE.md`. |
 
 The wrappers call the engine's own entry point rather than re-expressing any of its
-logic. That is deliberate: the engine carries 507 tests and 24 rounds of blind
+logic. That is deliberate: the engine carries 529 tests and 24 rounds of blind
 adversarial verification, and a second expression of those rules is a copy that can
 drift. Parity with the source is proven by
 `tools/parity_check.py` against captured real outputs, not asserted.

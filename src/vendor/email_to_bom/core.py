@@ -148,6 +148,37 @@ class Agent:
         size_matches = [
             mm for mm in re.finditer(r"(\.\d+|\d+(?:-\d+/\d+|[./]\d+)?)\s*(?:in|inch|\"|')\s*id\b", low)
             if not any(mm.start() < e and mm.end() > b for b, e in neg_spans)]
+        if not size_matches:
+            # CORPUS-2026-08-27 (F-1): the ID-anchored selector above captured the size on
+            # 6 of 125 real threads, because customers write '3/4" metal hoses' and
+            # "CS 1-1/2 inch MNPT", not "3/4in ID". Everything it missed fell through to
+            # the ungated length scan below and was drafted as the LENGTH. A dimension
+            # BOUND to the product or connection it describes is a size. Bounded four
+            # ways so it can never eat a length: inch-family units only (feet are never
+            # an ID), no punctuation and at most two words between dimension and noun, a
+            # value no larger than the largest ID stocked (size_bind_max_inches), and a
+            # tightly-bound length descriptor always wins ("4 in OAL hose assembly").
+            nouns = "|".join(re.escape(n) for n in
+                             sorted(self.rules["size_bind_nouns"], key=len, reverse=True))
+            cap = self.rules["size_bind_max_inches"]
+            desc_hits = self._length_types(low)
+            size_matches = [
+                mm for mm in re.finditer(
+                    r"(\.\d+|\d+(?:-\d+/\d+|[./]\d+)?)[ \t-]*"
+                    r"(in(?:ch(?:es)?)?\b|[\"”″])"
+                    r"(?:[ \t]*(?:[a-z][a-z.\-/]*[ \t]+){0,2}?(?:" + nouns + r")\b"
+                    # The industry's own shorthand: SIZE x LENGTH, both carrying a unit
+                    # ('1/2" x 72”', '2"x24"', '3" x 15 foot'). Only the left operand is
+                    # claimed here -- the span must END at the size's own unit, so a
+                    # LOOKAHEAD, or the length scan would find its own operand excluded.
+                    r"|(?=[ \t]*[x\u00d7][ \t]*"
+                    r"(?:\.\d+|\d+(?:-\d+/\d+|[./]\d+)?)[ \t-]*"
+                    r"(?:in(?:ch(?:es)?)?\b|f(?:oo|ee)?t\b|[\"”″'′])))", low)
+                if not any(mm.start() < e and mm.end() > b for b, e in neg_spans)
+                and (self._as_inches(mm.group(1)) or 0) > 0
+                and self._as_inches(mm.group(1)) <= cap
+                and not any(self._tightly_bound(low, (mm.start(1), mm.end(2)), span)
+                            for _canonical, span in desc_hits)]
         if size_matches:
             pick = size_matches[-1] if prefer_last else size_matches[0]
             ex.size = pick.group(1) + " ID"
@@ -271,9 +302,17 @@ class Agent:
         candidates = []  # (match, normalized value)
         for mm in re.finditer(
                 r"(\.\d+|\d+(?:-\d+/\d+|/\d+|\.\d+)?)[ \t-]*"
-                r"((?:in(?:ch(?:es)?)?|ft|foot|feet|mm|cm|meters?|metres?)\b|[\"'″′]|\s*m\b)", low_active):
+                r"((?:in(?:ch(?:es)?)?|ft|foot|feet|mm|cm|meters?|metres?)\b|[\"'″′]|[ \t]*m\b)", low_active):
             if any(mm.start() < e and mm.end() > s for s, e in dim_exclude):
                 continue  # this number is (part of) a size/pressure/temperature, not the length
+            # CORPUS-2026-08-27 (F-2), two structural gates. The unit must sit on the
+            # SAME LINE as its number: "Vic 3153\nM: 0478..." and "T 203-303-3412\nM
+            # 203-988-6243" were drafted as the lengths "3153 m" and "3412 m" -- a
+            # postcode and a phone number, each borrowing the "M" of the line below.
+            # And a material-grade token is never a dimension, the rule _find_quantity
+            # has carried since round 8: "(304 in place of 316)" was drafted as 304 in.
+            if mm.group(1) in self._digit_grades():
+                continue
             unit = mm.group(2).strip()
             if unit in ("ft", "foot", "feet", "'", "′"):
                 suffix = " ft"
@@ -319,11 +358,31 @@ class Agent:
             return m.group(0).strip(), False
         return None, False
 
+    @staticmethod
+    def _as_inches(raw: str) -> float | None:
+        """Numeric value of a dimension token: '3/4', '1-1/2', '4', '.5'. None when it
+        does not parse, which the size binder treats as 'not a size'."""
+        m = re.fullmatch(r"(\d+)-(\d+)/(\d+)", raw)
+        if m:
+            return int(m.group(1)) + int(m.group(2)) / int(m.group(3))
+        m = re.fullmatch(r"(\d+)/(\d+)", raw)
+        if m:
+            return int(m.group(1)) / int(m.group(2))
+        try:
+            return float(raw)
+        except ValueError:
+            return None
+
+    def _digit_grades(self) -> set[str]:
+        """Material-grade tokens that are bare digits (304, 316, ...). Never a quantity
+        (round 8) and, since the 2026-08-27 corpus scoring, never a dimension either."""
+        return {c for c in self.rules["material_callouts"] if c.isdigit()}
+
     def _find_quantity(self, low: str) -> int | None:
         """Grade-safe quantity detection (rounds 8-9). A number that is, or is the prefix
         of, a material-grade token (316, 904L, 17-4 PH, 254 SMO) is never a quantity;
         unresolvable cases return None so the draft ASKS instead of assuming."""
-        digit_grades = {c for c in self.rules["material_callouts"] if c.isdigit()}
+        digit_grades = self._digit_grades()
         for pat in (rf"(?:quote|need|want|qty|quantity)\D{{0,8}}(\d+){self._NOT_A_DIMENSION}",
                     rf"\b(\d+){self._NOT_A_DIMENSION}\s+(?:of|pieces?|pcs?|units?|assemblies)\b"):
             for m in re.finditer(pat, low):

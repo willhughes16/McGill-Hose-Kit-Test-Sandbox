@@ -38,10 +38,10 @@ python3 scripts/render_reply.py --out _report/reply.md --state _report/state.jso
 **Produces:** `_report/reply.md` (what you send), `_report/case_state.json`, `_report/bom_draft.md`
 
 For the shipped sample (a 4in EPDM suction hose assembly, couplers named but no
-size/temperature stated) the engine classifies it `hose_assembly`, drafts no BOM
-lines because no selection rule is grounded, raises 2 harness-held checkpoints
-and 6 open items — `MATERIAL_CONFIRM`, `VACUUM_VALUE_CONFIRM`,
-`TEMPERATURE_MISSING`, `SIZE_MISSING`, `LENGTH_TYPE_MISSING`,
+length or temperature stated) the engine classifies it `hose_assembly`, captures
+the size as `4 ID`, drafts no BOM lines because no selection rule is grounded,
+raises 2 harness-held checkpoints and 5 open items — `MATERIAL_CONFIRM`,
+`VACUUM_VALUE_CONFIRM`, `TEMPERATURE_MISSING`, `LENGTH_MISSING`,
 `SELECTION_UNRESOLVED`.
 
 ### 2. Draft with Component IDs an operator already confirmed

@@ -3,7 +3,7 @@
 
 This is a THIN WRAPPER, deliberately. It does not re-derive, re-order or
 re-interpret anything: it calls the vendored CLI's own ``main()`` with
-``--json`` and writes the bytes that come back. The engine's logic carries 507
+``--json`` and writes the bytes that come back. The engine's logic carries 529
 tests and 24 blind verification rounds; any second expression of it would be a
 copy that can drift, so there is none here.
 

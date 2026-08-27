@@ -10,8 +10,7 @@ Questions for the operator:
   - Material not confirmed as a specific grade (RFQ mentions non-metal 'epdm'). Operator: confirm the exact material of every component and whether CMTR/QC material verification (WI-031) applies before fabrication. (R-CMTR)
   - Vacuum/suction service noted — confirm the vacuum level (in Hg / mm Hg) or 'full vacuum'. (R-PRESSURE)
   - Operating temperature not stated. Confirm temperature (°F or °C; a range is fine). (R-TEMPERATURE)
-  - Hose size (inside diameter) not stated — confirm the ID. (R-EXTRACT)
-  - Length given without a length type. Confirm convention: overall length (OAL) / seat-to-seat / center-to-end / cut length / live length. (R-LENGTH)
+  - No length detected in the RFQ. Confirm the required assembly length and convention (overall length (OAL) / seat-to-seat / center-to-end / cut length / live length) before fabrication (WI-020). (R-LENGTH)
   - Hose/coupling not resolved. No grounded selection rule exists (G-1 waived) — operator must select/confirm the hose and end fittings. (R-CATALOG)
 
 Case state: class=hose_assembly
@@ -19,6 +18,5 @@ Open items (for the conversation layer):
   - [MATERIAL_CONFIRM] Material not confirmed as a specific grade (RFQ mentions non-metal 'epdm'). Operator: confirm the exact material of every component and whether CMTR/QC material verification (WI-031) applies before fabrication.
   - [VACUUM_VALUE_CONFIRM] Vacuum/suction service noted — confirm the vacuum level (in Hg / mm Hg) or 'full vacuum'.
   - [TEMPERATURE_MISSING] Operating temperature not stated. Confirm temperature (°F or °C; a range is fine).
-  - [SIZE_MISSING] Hose size (inside diameter) not stated — confirm the ID.
-  - [LENGTH_TYPE_MISSING] Length given without a length type. Confirm convention: overall length (OAL) / seat-to-seat / center-to-end / cut length / live length.
+  - [LENGTH_MISSING] No length detected in the RFQ. Confirm the required assembly length and convention (overall length (OAL) / seat-to-seat / center-to-end / cut length / live length) before fabrication (WI-020).
   - [SELECTION_UNRESOLVED] Hose/coupling not resolved. No grounded selection rule exists (G-1 waived) — operator must select/confirm the hose and end fittings.
