@@ -28,7 +28,7 @@
     "vendor/email_to_bom/validators.py"
   ],
   "download_url": "https://TODO.example/mcgill-email-to-bom/dist/kit.zip",
-  "sha256": "16291b00fe6c2d801f3b8b8fd76a3bace26d04345c29c0149ee91391d1131612",
+  "sha256": "26bdeb5e1a31fb29d94fa32225ba480accafca8427cc91b48710df0314c3b8f8",
   "manifest_version": 4,
   "contract_version": "^1.0.0",
   "requires": {

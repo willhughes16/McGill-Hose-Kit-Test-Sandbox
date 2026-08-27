@@ -496,5 +496,6 @@ quietly treated as complete.
   byte-identical, so parity holds and the cost is the engine's, not the kit's. The kit
   now warns above 100 KB from the wrapper scripts and states an honest `estimated_duration`;
   a real fix (or a documented input ceiling) belongs upstream. Note a kit run costs
-  THREE engine passes, so the end-to-end cost is ~3x the single-pass figures
-  (round 26, R26-F7).
+  FOUR engine passes as of v0.10.0 (one extract, two in generate_report, one in
+  render_reply's reconciliation), so the end-to-end cost is ~4x the single-pass
+  figures (round 26 R26-F7; recount at round 33 pre-flight).
