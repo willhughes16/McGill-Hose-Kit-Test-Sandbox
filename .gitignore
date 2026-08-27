@@ -20,3 +20,8 @@ __pycache__/
 tools/parity/fixtures/*/actual_*
 tools/parity/fixtures/*/state.json
 tools/parity/fixtures/*/case_state.json
+
+# golden-suite byproducts — regenerated on every run
+tools/golden/fixtures/*/actual_*
+tools/golden/fixtures/*/reply.md
+tools/golden/fixtures/*/_report/

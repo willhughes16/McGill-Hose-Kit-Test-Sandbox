@@ -1,0 +1,102 @@
+{
+  "schema_version": "2.0",
+  "request_class": "hose_assembly",
+  "urgency": {
+    "flagged": true,
+    "phrases": [
+      "need today"
+    ]
+  },
+  "classes": [
+    "Certs Required"
+  ],
+  "class_evidence": "assembly + fittings named",
+  "routing": {
+    "recommendation": "inside_sales_review",
+    "reasons": [
+      "C1 open"
+    ],
+    "future_key": "REMAINDER-ROUTING"
+  },
+  "extraction": {
+    "end_fittings": [
+      "BARB"
+    ],
+    "material_recognized": false
+  },
+  "fields": {
+    "material": {
+      "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx LONGTAIL",
+      "status": "captured"
+    },
+    "length": {
+      "value": "36",
+      "type": "seat-to-seat",
+      "status": "reading"
+    },
+    "pressure": {
+      "status": "conflict",
+      "evidence": "150 psi here and then zzzzzzzzzzzzzzzzzzzzzzzzzzzzzz 1450.75 psig"
+    }
+  },
+  "open_items": [
+    {
+      "code": "PRESSURE_CONFLICT",
+      "priority": "blocking",
+      "ask": "Two pressures stated",
+      "route": "inside_sales_review",
+      "tier": "candidate",
+      "citation": "chunk_9"
+    },
+    {
+      "code": "NEW_CODE",
+      "priority": "unrecognised_priority",
+      "ask": "novel"
+    }
+  ],
+  "questions": [
+    {
+      "text": "legacy twin",
+      "rule_id": "R-ZZZ"
+    }
+  ],
+  "bom_columns": [
+    "Component ID"
+  ],
+  "lines": [
+    {
+      "Component ID": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy-LONGID",
+      "off_column": "OFFCOL"
+    }
+  ],
+  "checkpoints": [
+    {
+      "id": "C1",
+      "status": "PENDING",
+      "owner": "QC",
+      "rule_id": "R-QC",
+      "extra": "CPEXTRA"
+    }
+  ],
+  "notes": [
+    "a note"
+  ],
+  "supersedes": [
+    {
+      "field": "size",
+      "to": "4in"
+    }
+  ],
+  "logged_attempts": [
+    "logged one"
+  ],
+  "knowledge": {
+    "source": "none",
+    "lookups": [
+      {
+        "op": "resolve_component"
+      }
+    ]
+  },
+  "a_future_key": "REMAINDER-TOP"
+}
