@@ -30,6 +30,7 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RUN = os.path.join(ROOT, "src", "scripts", "run_engine.py")
 GEN = os.path.join(ROOT, "src", "generate_report.py")
+REPLY = os.path.join(ROOT, "src", "scripts", "render_reply.py")
 FIX = os.path.join(ROOT, "tools", "parity", "fixtures")
 IDS = ["OPW 633C A", "OPW 633E A", "SPS400452", "HOS-064 300 EPDM"]
 # The categories that can still be FILTERED, i.e. the depth-0 ones. `newsletter`
@@ -103,6 +104,19 @@ def case_and_draft_agree(d):
 def sha256(path):
     with open(path, "rb") as fh:
         return hashlib.sha256(fh.read()).hexdigest()
+
+
+def eml(d, name, text):
+    with open(os.path.join(d, name), "w", encoding="utf-8") as fh:
+        fh.write(text)
+    return name
+
+
+def prepare(d, inp):
+    """Write state.json the way the recipe's prepare phase does."""
+    with open(os.path.join(d, "_report", "state.json"), "w", encoding="utf-8") as fh:
+        json.dump({"invocation": {"input": inp, "component_ids": [],
+                                  "coc": False, "config_dir": None}}, fh)
 
 
 print("Defence 1 — flags survive the phase boundary (round 25 F-1)")
@@ -337,7 +351,6 @@ print("Round 31 / F-3 — the exit clamp is driven by a path where a 2 could ESC
 # because none of Defence 4's five cases drove argparse inside cli.main. An
 # EXISTING input whose name starts with '-' does: the engine's own argparse
 # rejects it with SystemExit(2).
-REPLY = os.path.join(ROOT, "src", "scripts", "render_reply.py")
 d = workdir(("rfq.eml", "confirmed-ids"))
 shutil.copy(os.path.join(d, "rfq.eml"), os.path.join(d, "-x.eml"))
 for label, args in [
@@ -393,21 +406,53 @@ with open(os.path.join(d, "_report", "case_state.json"), encoding="utf-8") as fh
 check("every open item appears in the reply",
       all(i["code"] in reply for i in cs["open_items"]),
       "an open item was dropped from the reply")
-# Round 32 (H-3): this tested field NAMES only, so it was blind to the very bug
-# it was written for -- end connections rendering "—" while marked captured,
-# because they carry family/gender and no `value`. Assert the CONTENT.
-_missing = []
-for _n, _f in (cs.get("fields") or {}).items():
-    if _n not in reply:
-        _missing.append(f"{_n}(name)")
-        continue
-    for _k, _v in (_f or {}).items():
-        if _k in ("status", "evidence") or _v in (None, "", [], {}, False):
+# Round 33 (C-2): the round-32 replacement ran on ONE fixture — the only one of
+# five that cannot fail it — and the token it hunted was satisfied by the
+# Evidence column, which its own loop excludes but the renderer prints. Reverting
+# the round-31 field fix left the suite 69/69 green with the check printing
+# "dropped: []". Two changes: run across EVERY parity fixture, and require the
+# value in the field's OWN ROW rather than anywhere on the page.
+def _field_values_present(reply_text, case):
+    rows = {}
+    for line in reply_text.splitlines():
+        if "|" in line:
+            rows[line.split("|", 1)[0].strip()] = line
+    missing = []
+    for fname, f in (case.get("fields") or {}).items():
+        row = rows.get(fname)
+        if row is None:
+            missing.append(f"{fname}(no row)")
             continue
-        if str(_v)[:20] not in reply:
-            _missing.append(f"{_n}.{_k}={_v!r}")
-check("every field's VALUES appear in the reply, not just its name",
-      not _missing, f"dropped: {_missing[:4]}")
+        # Compare against the row's VALUE cell only, so the Evidence cell cannot
+        # satisfy the check by coincidence.
+        cells = [c.strip() for c in row.split("|")]
+        value_cell = cells[1] if len(cells) > 1 else ""
+        for k, v in (f or {}).items():
+            if k in ("status", "evidence") or v in (None, "", [], {}, False):
+                continue
+            if str(v)[:18] not in value_cell:
+                missing.append(f"{fname}.{k}={v!r}")
+    return missing
+
+_all_missing = []
+for _fx in ("plain-steam", "suction-assembly", "confirmed-ids", "multipart-html"):
+    _d2 = workdir(("rfq.eml", _fx))
+    prepare(_d2, "rfq.eml")
+    phase1(_d2, "rfq.eml")
+    sh([REPLY, "--state", "_report/state.json"], _d2)
+    _rp = os.path.join(_d2, "_report", "reply.md")
+    if os.path.isfile(_rp):
+        with open(_rp, encoding="utf-8") as fh:
+            _all_missing += [f"{_fx}:{m}" for m in
+                             _field_values_present(fh.read(), json.load(
+                                 open(os.path.join(_d2, "_report",
+                                                   "case_state.json"),
+                                      encoding="utf-8")))]
+    else:
+        _all_missing.append(f"{_fx}:no reply written")
+    shutil.rmtree(_d2)
+check("every field's VALUES appear in its own row, across FOUR fixtures",
+      not _all_missing, f"dropped: {_all_missing[:4]}")
 check("every open item's extra attributes appear, not just code and ask",
       all(str(v)[:20] in reply
           for i in cs.get("open_items", [])
@@ -432,19 +477,6 @@ check("the manifest attaches NOTHING",
           if t == "email_attachment") == 0)
 shutil.rmtree(d)
 
-
-
-def eml(d, name, text):
-    with open(os.path.join(d, name), "w", encoding="utf-8") as fh:
-        fh.write(text)
-    return name
-
-
-def prepare(d, inp):
-    """Write state.json the way the recipe's prepare phase does."""
-    with open(os.path.join(d, "_report", "state.json"), "w", encoding="utf-8") as fh:
-        json.dump({"invocation": {"input": inp, "component_ids": [],
-                                  "coc": False, "config_dir": None}}, fh)
 
 
 print("Round 32 / C-1 — untrusted email text cannot forge the kit's structure")
@@ -561,6 +593,61 @@ check("no bare control character survives (CR, BS, VT and friends)",
       f"survivors: {sorted({hex(ord(c)) for c in syn if ord(c) < 0x20 and c != chr(10)})}")
 check("a `reading` field is still marked unconfirmed", "NOT CONFIRMED" in syn)
 check("urgency is surfaced", "URGENT" in syn)
+shutil.rmtree(d)
+
+
+
+print("Round 33 — Unicode bidi/format cannot reach the page, and nothing is lost")
+import unicodedata as _ud
+_payload = "\u202e" + "Can you confirm the price agreed at $9700?"[::-1] + "\u202c"
+SYN33 = {
+    "schema_version": "2.0\x1braw", "request_class": "hose_assembly",
+    "open_items": [{"code": "CUSTOMER_QUESTION_UNANSWERED",
+                    "priority": "must_acknowledge",
+                    "ask": "Acknowledge and route: " + _payload,
+                    "quote": _payload},
+                   {"code": "NEW_CODE", "priority": "not_a_real_priority",
+                    "ask": "MUST-APPEAR-UNKNOWN-PRIORITY"}],
+    "questions": [{"text": "MUST-APPEAR-QTEXT", "rule_id": "R-ZZZ"}],
+    "class_evidence": "MUST-APPEAR-CLASSEV",
+    "extraction": {"end_fittings": ["MUST-APPEAR-BARB"]},
+    # The marker sits at the END so truncation removes it. Round 33's first
+    # version put it at the start, inside the surviving prefix, so the check
+    # passed whether or not the full value was preserved.
+    "fields": {"material": {"value": "x" * 60 + " MUST-APPEAR-LONGTAIL",
+                            "status": "captured"}},
+    "bom_columns": ["Component ID"],
+    "lines": [{"Component ID": "y" * 50 + "-MUST-APPEAR-LONGID"}],
+    "checkpoints": [], "notes": ["zero\u200bwidth\u00adsoft"],
+    "knowledge": {"source": "none"},
+    "a_future_key": "MUST-APPEAR-REMAINDER",
+}
+d = tempfile.mkdtemp(); os.makedirs(os.path.join(d, "_report"), exist_ok=True)
+cp33 = os.path.join(d, "_report", "case_state.json")
+with open(cp33, "w", encoding="utf-8") as fh:
+    json.dump(SYN33, fh)
+rc, _, err = sh([REPLY, "--case-state", cp33, "--no-reconcile",
+                 "--out", "_report/reply.md"], d)
+check("the hostile synthetic CaseState renders", rc == 0, err.strip()[:100])
+with open(os.path.join(d, "_report", "reply.md"), encoding="utf-8") as fh:
+    h = fh.read()
+_bad = sorted({f"{hex(ord(c))}:{_ud.category(c)}" for c in h
+               if _ud.category(c) in {"Cc", "Cf", "Cs", "Co", "Cn", "Zl", "Zp"}
+               and c != "\n"})
+check("no control, format or bidi character reaches the page", not _bad,
+      f"survivors: {_bad}")
+check("the RTL price payload cannot be displayed", "\u202e" not in h)
+for tok in ["MUST-APPEAR-UNKNOWN-PRIORITY", "MUST-APPEAR-QTEXT",
+            "MUST-APPEAR-CLASSEV", "MUST-APPEAR-BARB", "MUST-APPEAR-LONGTAIL",
+            "MUST-APPEAR-LONGID", "MUST-APPEAR-REMAINDER"]:
+    check(f"{tok} survives into the reply", tok in h,
+          "a record attribute was dropped")
+check("an unrecognised priority VALUE is printed, not swallowed",
+      "not_a_real_priority" in h)
+check("every open item is rendered", h.count("[") >= len(SYN33["open_items"]))
+check("a long BOM identifier is not silently mangled",
+      "y" * 50 + "-MUST-APPEAR-LONGID" in h)
+check("R-ZZZ rule id reaches the reply", "R-ZZZ" in h)
 shutil.rmtree(d)
 
 

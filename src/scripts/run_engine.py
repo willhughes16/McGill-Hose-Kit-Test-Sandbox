@@ -52,8 +52,8 @@ from run_state import (  # noqa: E402
 )
 
 # Past this size the engine's runtime grows superlinearly, and a kit run makes
-# THREE engine passes in total (one here, two in generate_report.py), so the real
-# cost is ~3x a single pass. We warn rather than refuse: refusing would change
+# FOUR engine passes in total (one here, two in generate_report.py, one in
+# render_reply.py's reconciliation), so the real cost is ~4x a single pass. We warn rather than refuse: refusing would change
 # behaviour and break parity with the source, which processes it regardless.
 SLOW_INPUT_BYTES = 100 * 1024
 

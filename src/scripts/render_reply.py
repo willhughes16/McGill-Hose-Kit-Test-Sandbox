@@ -6,12 +6,15 @@ message body, including the parts `bom_draft.md` deliberately drops: every field
 with its status and evidence, the routing recommendation, supersede history and
 knowledge provenance.
 
-This reads `_report/case_state.json` and nothing else. That is deliberate and
-different from `generate_report.py`, which re-runs the engine to reproduce its
-verbatim rendering: there is no upstream text to be byte-identical to here, so
-re-running would buy nothing and cost a third engine pass. The CaseState IS the
-contract, and it was already reconciled against a replayed extraction by
-`generate_report.py`.
+It renders from `_report/case_state.json`, and it RECONCILES: before writing, it
+re-derives the CaseState from the recorded invocation and refuses if the two
+differ. Round 32 (H-1) found the earlier design -- read the file, trust it --
+writing a confident reply from a CaseState `generate_report.py` had already
+refused, complete with a fabricated price beneath this file's own footer stating
+that no price appears. The reply is the ONLY artifact a human reads, so it needs
+that guard more than the draft does, not less. The cost is one extra engine pass
+(four per run in total); `--no-reconcile` skips it and is for rendering a
+CaseState in isolation, never for a real run.
 
 What this must never do, because the whole engine is built the other way:
   * never resolve, answer, drop or re-word an open item -- they are the point;
@@ -30,6 +33,7 @@ import json
 import os
 import re
 import sys
+import unicodedata
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
@@ -55,11 +59,28 @@ PRIORITY_ORDER = ("blocking", "confirm", "must_acknowledge")
 # own checkpoint lines -- a customer could show a checkpoint as CLEARED. Control
 # characters are stripped and newlines folded, so untrusted text can never start
 # a line, erase one, or open a section.
-_ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b[@-Z\\-_]")
+_ANSI = re.compile(
+    # 7-bit CSI/OSC/DCS and single-character escapes, plus the 8-bit C1 forms
+    # (0x9B CSI, 0x9D OSC, 0x90 DCS) a terminal acts on identically.
+    r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?"
+    r"|\x1b[P^_][^\x1b]*(?:\x1b\\)?"
+    r"|\x1b\[[0-9;?]*[ -/]*[@-~]"
+    r"|\x1b[@-Z\\-_]"
+    r"|\x9b[0-9;?]*[ -/]*[@-~]"
+    r"|[\x9d\x90][^\x9c]*\x9c?")
 
-_CONTROL = {c: None for c in range(0x20)}
-_CONTROL.update({c: None for c in range(0x7F, 0xA0)})
-_CONTROL.pop(ord("\t"), None)
+# Unicode categories that must never reach the page, stripped BY CATEGORY rather
+# than by a list of code points. Round 33 (C-1) found the previous version
+# handled ANSI and C0/C1 only, so a U+202E right-to-left override let a customer
+# render arbitrary display text -- the demonstrated payload was "Can you confirm
+# the price agreed at $9700?", forty lines above this file's own footer stating
+# that no price appears. Enumerating code points is the failure mode that has
+# recurred a dozen times in this campaign; a category test cannot go stale as
+# Unicode adds characters.
+#   Cc control · Cf format (bidi overrides, isolates, ZWJ/ZWNJ, soft hyphen,
+#   BOM) · Cs surrogate · Co private use · Cn unassigned · Zl/Zp line and
+#   paragraph separators.
+_STRIP_CATEGORIES = frozenset({"Cc", "Cf", "Cs", "Co", "Cn", "Zl", "Zp"})
 
 
 def _safe(value, limit=None):
@@ -76,7 +97,9 @@ def _safe(value, limit=None):
     # ESC leaves the printable residue ("[2K[G") in the page: harmless but
     # confusing noise that still reads as though the kit emitted it.
     text = _ANSI.sub("", text)
-    text = text.replace("\t", " ").translate(_CONTROL)
+    text = text.replace("\t", " ")
+    text = "".join(ch for ch in text
+                   if unicodedata.category(ch) not in _STRIP_CATEGORIES)
     text = " ".join(text.split())
     if limit and len(text) > limit:
         text = text[: limit - 1] + "…"
@@ -99,7 +122,7 @@ def _table(rows, headers):
 _ITEM_HEADLINE = ("code", "ask", "quote", "priority")
 
 
-def _open_item(it):
+def _open_item(it, show_priority=False):
     """One open item, with EVERY attribute the engine set.
 
     Round 32 (C-2/H-2) found this rendered through a hand-written three-key
@@ -113,6 +136,11 @@ def _open_item(it):
     out = []
     text = it.get("ask") or it.get("quote") or ""
     out.append(f"    [{_safe(it.get('code'))}] {_safe(text)}")
+    if show_priority:
+        # Round 33 (H-2): `priority` sits in the headline set, so it was excluded
+        # from the all-other-keys loop AND never printed -- an unrecognised value
+        # vanished entirely.
+        out.append(f"        priority: {_safe(it.get('priority'))}")
     for k in sorted(k for k in it if k not in _ITEM_HEADLINE):
         v = it[k]
         if v in (None, "", [], {}):
@@ -178,15 +206,17 @@ def render(case):
             L.append("")
         leftover = [i for i in items if i.get("priority") not in PRIORITY_ORDER]
         if leftover:
-            L.append("  (OTHER PRIORITY)")
+            L.append("  (PRIORITY NOT RECOGNISED — treat as blocking until "
+                     "someone classifies it)")
             for it in leftover:  # never silently omit an item with a new priority
-                L.extend(_open_item(it))
+                L.extend(_open_item(it, show_priority=True))
             L.append("")
 
     # ---- what the engine understood, with evidence ---------------------------
     fields = case.get("fields") or {}
     if fields:
         rows = []
+        long_values = []
         for name in sorted(fields):
             f = fields[name] or {}
             status = f.get("status", "")
@@ -198,11 +228,17 @@ def render(case):
                      if k not in ("status", "evidence")
                      and v not in (None, "", [], {})}
             if "value" in shown and len(shown) == 1:
-                value = _safe(shown["value"], 40)
+                full = _safe(shown["value"])
             elif shown:
-                value = _safe(", ".join(f"{k}={v}" for k, v in sorted(shown.items())), 40)
+                full = _safe(", ".join(f"{k}={v}" for k, v in sorted(shown.items())))
             else:
-                value = "—"
+                full = "—"
+            value = full if len(full) <= 40 else full[:39] + "…"
+            if value != full:
+                # Round 33 (H-3): truncation silently dropped attributes,
+                # including a truncated Component ID in a BOM. A shortened cell
+                # is fine; losing the data is not.
+                long_values.append((name, full))
             mark = "" if status not in UNCONFIRMED else "  <-- NOT CONFIRMED"
             rows.append([_safe(name), value, _safe(status) + mark,
                          _safe(f.get("evidence"), 48)])
@@ -210,6 +246,10 @@ def render(case):
         L.append("")
         L.append(_table(rows, ["Field", "Value", "Status", "Evidence"]))
         L.append("")
+        for _n, _full in long_values:
+            L.append(f"  {_safe(_n)} in full: {_full}")
+        if long_values:
+            L.append("")
         L.append("  A status other than 'captured' is NOT a confirmed value. The engine")
         L.append("  deliberately refuses to commit to an ambiguous one.")
         L.append("")
@@ -220,7 +260,7 @@ def render(case):
         L.append("DRAFT BILL OF MATERIALS")
         L.append("")
         if lines:
-            L.append(_table([[_safe(l.get(c, ""), 40) for c in cols] for l in lines],
+            L.append(_table([[_safe(l.get(c, "")) for c in cols] for l in lines],
                             [_safe(c) for c in cols]))
             # A BOM line may carry data outside the declared columns; show it
             # rather than letting bom_columns silently define what exists.
@@ -273,16 +313,63 @@ def render(case):
             L.append(f"  - {_safe(a)}")
         L.append("")
 
+    # Round 33 (H-4) found the reply LOSING what bom_draft.md carries: all six
+    # `questions[].rule_id`, `extraction.end_fittings` (a barb the customer named
+    # explicitly), and `class_evidence` -- while three documents claimed the reply
+    # was a superset. Rather than adding three named keys and waiting for round 34
+    # to name the next, everything rendered above is tracked and ANY unconsumed
+    # top-level key is printed below. A key cannot be silently absent.
+    qs = case.get("questions") or []
+    if qs:
+        L.append("RULES THAT FIRED (the engine's own question record)")
+        L.append("")
+        for q in qs:
+            rid = q.get("rule_id") if isinstance(q, dict) else None
+            txt = q.get("text") if isinstance(q, dict) else q
+            L.append(f"  - {_safe(txt)}" + (f"   ({_safe(rid)})" if rid else ""))
+        L.append("")
+    ce = case.get("class_evidence")
+    if ce:
+        L.append(f"Why this request class: {_safe(json.dumps(ce, sort_keys=True) if not isinstance(ce, str) else ce)}")
+        L.append("")
+    extraction = case.get("extraction") or {}
+    extra_ex = {k: v for k, v in extraction.items()
+                if v not in (None, "", [], {}, False) and k not in fields}
+    if extra_ex:
+        L.append("EXTRACTED, NOT IN THE FIELD TABLE")
+        L.append("")
+        for k in sorted(extra_ex):
+            L.append(f"  {_safe(k)}: {_safe(json.dumps(extra_ex[k], sort_keys=True) if isinstance(extra_ex[k], (list, dict)) else extra_ex[k])}")
+        L.append("")
+
     know = case.get("knowledge") or {}
     L.append("PROVENANCE")
     L.append("")
-    L.append(f"  schema_version: {case.get('schema_version')}")
+    L.append(f"  schema_version: {_safe(case.get('schema_version'))}")
     L.append(f"  knowledge source: {_safe(know.get('source'))}"
              + (f" (revision {_safe(know.get('revision'))})" if know.get("revision") else ""))
     lookups = know.get("lookups") or []
     L.append(f"  knowledge lookups: {len(lookups)}")
     for lk in lookups:
         L.append(f"    - {_safe(json.dumps(lk, sort_keys=True))}")
+    L.append("")
+    # The completeness backstop. Anything the CaseState carries and the sections
+    # above did not consume is printed verbatim, so "all the information" is a
+    # property of the renderer rather than a claim about it.
+    _consumed = {"schema_version", "request_class", "urgency", "classes", "routing",
+                 "open_items", "questions", "class_evidence", "extraction",
+                 "fields", "bom_columns", "lines", "checkpoints", "notes",
+                 "supersedes", "logged_attempts", "knowledge"}
+    leftover_keys = {k: v for k, v in case.items()
+                     if k not in _consumed and v not in (None, "", [], {}, False)}
+    if leftover_keys:
+        L.append("")
+        L.append("ALSO IN THE CASE RECORD (not covered by a section above)")
+        L.append("")
+        for k in sorted(leftover_keys):
+            v = leftover_keys[k]
+            L.append(f"  {_safe(k)}: "
+                     f"{_safe(json.dumps(v, sort_keys=True) if isinstance(v, (list, dict)) else v)}")
     L.append("")
     L.append("No price, lead time or stock position appears above: the engine produces "
              "none.")

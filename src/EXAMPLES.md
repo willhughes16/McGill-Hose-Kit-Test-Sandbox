@@ -140,7 +140,7 @@ order.
   ever produced. Stock and pricing questions are acknowledged and routed to a
   human. Do not present the output as a quote.
 - **One email per run.** Point it at a single RFQ; run it again for the next one.
-- **Large threads are slow, and a run costs three engine passes.** A single pass
+- **Large threads are slow, and a run costs four engine passes.** A single pass
   is ~0.1 s at 8 KB, ~5 s at 134 KB, ~80 s at 538 KB — superlinear past roughly
   100 KB. A full kit run makes **four** passes: one in `extract_case`, two in
   `generate_report` (it re-derives the CaseState to reconcile before rendering),

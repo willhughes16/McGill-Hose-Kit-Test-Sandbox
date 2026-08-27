@@ -413,6 +413,41 @@ HIGHs. **Mutation survival 33 of 51 (65%) — the worst recorded — and 28 of t
   clamp alone does not leak exit 2, because `__main__`'s broad catch handles `SystemExit`
   first. The property is covered — by the broad catch, not the clamp.
 
+### Round 33 (blind verification) — FAIL, and what it changed
+
+Round 33 returned FAIL — nine for nine — with two CRITICALs. **Mutation survival improved
+to 22 of 57 (39%) from round 32's 33/51 (65%), and CaseState fidelity to 12 of 17 keys
+rendered whole from 10.** It also REFUTED one of the three weaknesses named on its own bar:
+the reply's reconciliation does not produce false refusals (10 repeat renders, 12
+PYTHONHASHSEED pairs, absolute paths and an alternate `--config-dir` all reconciled).
+
+- REQ-068 Untrusted text is stripped by Unicode CATEGORY, not by a list of code points.
+  C-1: `_safe()` handled ANSI and C0/C1 and passed bidi through, so a `U+202E` override in
+  a customer's question rendered as **"Can you confirm the price agreed at $9700?"** forty
+  lines above the same file's footer stating that no price appears — an arbitrary
+  display-text channel whose highest-value payload is the one content class the kit exists
+  never to emit. The author had named the Unicode gap as cosmetic line-reordering and
+  underestimated it. Now `Cc/Cf/Cs/Co/Cn/Zl/Zp` are stripped by category, which cannot go
+  stale as Unicode grows, and the ANSI pattern covers OSC/DCS and the 8-bit C1 forms.
+- REQ-069 A check must be run against every fixture that could falsify it. C-2: round 32's
+  own anti-tautology check was pointed at the ONE fixture of five that cannot fail it, and
+  the token it hunted was satisfied by the Evidence column its own loop excludes. Reverting
+  the round-31 field fix left the suite 69/69 green printing "dropped: []". It now runs
+  across four fixtures and compares against the row's VALUE cell only.
+- REQ-070 The reply is a superset of the draft, by construction. H-4: it LOST all six
+  `questions[].rule_id` the draft carries, plus `extraction.end_fittings` (a barb the
+  customer named) and `class_evidence`, while three documents claimed it was a superset.
+  Those are now rendered, and a REMAINDER section prints any top-level key no section
+  consumed — so completeness is a property of the renderer, not a claim about it.
+- REQ-071 Nothing is lost to presentation. H-2: an unrecognised `priority` was never
+  printed, because the key sits in the headline set and so was excluded from the
+  all-other-keys loop. H-3: 40/48-char truncation silently dropped attributes including a
+  Component ID; long values are now shown in full below the table.
+- REQ-072 A marker must sit where the defect would remove it. Round 33's first coverage
+  attempt put `MUST-APPEAR-LONG` inside the surviving prefix, so the truncation check
+  passed either way — the same coincidence-match that round 32 found. Markers now sit in
+  the truncation tail.
+
 ## Constraints
 
 - **Never edit `src/vendor/`** to change an outcome. It is a stamped verbatim copy;
