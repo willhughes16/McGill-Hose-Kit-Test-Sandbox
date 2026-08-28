@@ -772,6 +772,113 @@ check("knowledge keys beyond source/revision/lookups appear",
       "MUST-APPEAR-KEXTRA" in pr)
 shutil.rmtree(d)
 
+print("Round 36 backlog — a state-record write failure is LOUD, never a silent 0")
+# Round 36: making write_state swallow OSError left run_engine exiting 0 with no
+# state record, and nothing caught it. A later phase would then act on the
+# PREVIOUS run's record — the R26-F1 family, via state rather than artifacts.
+d = workdir(("rfq.eml", "plain-steam"))
+_st = os.path.join(d, "_report", "state.json")
+with open(_st, "w", encoding="utf-8") as fh:
+    fh.write("{}")
+os.chmod(_st, 0o444)                       # unwritable, but readable and present
+try:
+    rc, _, err = sh([RUN, "--in", "rfq.eml", "--state", "_report/state.json"], d)
+    check("an unwritable state record stops the run (exit 1, not 0)", rc == 1,
+          f"exit={rc} err={err.strip()[:110]}")
+finally:
+    os.chmod(_st, 0o644)
+shutil.rmtree(d)
+
+print("Round 36 backlog — no failure path leaves a 0-byte CaseState")
+# Round 36: two run_engine degradations left an empty case_state.json behind an
+# exit 1. A zero-byte CaseState is worse than none: it parses as neither valid
+# JSON nor absence, and the reconciliation guards read it before deciding.
+for _label, _args in [
+    ("missing input", ["--in", "nope.eml", "--state", "_report/state.json"]),
+    ("no input given", ["--state", "_report/state.json"]),
+    ("--from-state with no record", ["--from-state", "--state",
+                                     "_report/state.json"]),
+]:
+    d = workdir(("rfq.eml", "plain-steam"))
+    rc, _, _ = sh([RUN] + _args, d)
+    _cs = os.path.join(d, "_report", "case_state.json")
+    _bad = os.path.isfile(_cs) and os.path.getsize(_cs) == 0
+    check(f"{_label}: no 0-byte CaseState is left behind", not _bad,
+          f"exit={rc} size={os.path.getsize(_cs) if os.path.isfile(_cs) else 'absent'}")
+    shutil.rmtree(d)
+
+print("Round 36 backlog — a FALSY knowledge extra still reaches the page")
+# Round 35 fixed knowledge keys beyond source/revision/lookups; round 36 found
+# the FALSY variant of that fix uncovered — one layer below a check that works.
+d = tempfile.mkdtemp()
+os.makedirs(os.path.join(d, "_report"), exist_ok=True)
+_cp = os.path.join(d, "_report", "case_state.json")
+with open(_cp, "w", encoding="utf-8") as fh:
+    json.dump({"schema_version": "2.0", "request_class": "hose_assembly",
+               "fields": {}, "open_items": [], "lines": [], "bom_columns": [],
+               "checkpoints": [],
+               "knowledge": {"source": "none", "k_false": False, "k_zero": 0}}, fh)
+sh([REPLY, "--case-state", _cp, "--no-reconcile", "--out", "_report/reply.md"], d)
+with open(os.path.join(d, "_report", "reply.md"), encoding="utf-8") as fh:
+    _kf = fh.read()
+check("a False-valued knowledge key reaches the reply", "k_false" in _kf)
+check("a 0-valued knowledge key reaches the reply", "k_zero" in _kf)
+shutil.rmtree(d)
+
+print("Round 36 backlog — EVERY non-captured status is marked, driven from the schema")
+# Round 36: 6 of the 10 hand-written UNCONFIRMED members were deletable with the
+# whole suite green, one live on a plain camlock email. The set was correct; the
+# problem was that nothing noticed if it drifted. The enumeration is now gone
+# (anything != "captured" is unconfirmed), and this check is driven from the
+# SCHEMA so a status added there is covered without editing this file.
+with open(os.path.join(ROOT, "src", "schemas", "case_state.schema.json"),
+          encoding="utf-8") as fh:
+    _sch = json.load(fh)
+_statuses = _sch["properties"]["fields"]["additionalProperties"]["properties"]["status"]["enum"]
+check("the schema declares more than one status (else this check is vacuous)",
+      len(_statuses) > 1, f"statuses={_statuses}")
+for _st in _statuses:
+    d = tempfile.mkdtemp()
+    os.makedirs(os.path.join(d, "_report"), exist_ok=True)
+    _cp = os.path.join(d, "_report", "case_state.json")
+    with open(_cp, "w", encoding="utf-8") as fh:
+        json.dump({"schema_version": "2.0", "request_class": "hose_assembly",
+                   "fields": {"probe_field": {"value": "PROBE-VALUE",
+                                              "status": _st}},
+                   "open_items": [], "lines": [], "bom_columns": [],
+                   "checkpoints": [], "knowledge": {"source": "none"}}, fh)
+    rc, _, _ = sh([REPLY, "--case-state", _cp, "--no-reconcile",
+                   "--out", "_report/reply.md"], d)
+    with open(os.path.join(d, "_report", "reply.md"), encoding="utf-8") as fh:
+        _body = fh.read()
+    _row = [l for l in _body.splitlines() if l.startswith("probe_field")]
+    _marked = bool(_row) and "NOT CONFIRMED" in _row[0]
+    if _st == "captured":
+        check("a `captured` field is NOT marked unconfirmed", not _marked,
+              f"row={_row}")
+    else:
+        check(f"a `{_st}` field IS marked NOT CONFIRMED", _marked,
+              f"row={_row} — the reply would present it as certain")
+    shutil.rmtree(d)
+# And the invariant itself: an unheard-of status must be treated as unconfirmed,
+# never as certain.
+d = tempfile.mkdtemp()
+os.makedirs(os.path.join(d, "_report"), exist_ok=True)
+_cp = os.path.join(d, "_report", "case_state.json")
+with open(_cp, "w", encoding="utf-8") as fh:
+    json.dump({"schema_version": "2.0", "request_class": "hose_assembly",
+               "fields": {"probe_field": {"value": "PROBE-VALUE",
+                                          "status": "a_status_from_the_future"}},
+               "open_items": [], "lines": [], "bom_columns": [],
+               "checkpoints": [], "knowledge": {"source": "none"}}, fh)
+sh([REPLY, "--case-state", _cp, "--no-reconcile", "--out", "_report/reply.md"], d)
+with open(os.path.join(d, "_report", "reply.md"), encoding="utf-8") as fh:
+    _fut = fh.read()
+check("an UNKNOWN status is treated as unconfirmed, not as certain",
+      "NOT CONFIRMED" in _fut,
+      "a status the schema does not declare was presented as confirmed")
+shutil.rmtree(d)
+
 print("Round 36 / H-2 — a new extraction clears the run's artifacts in EVERY "
       "directory it touches, including when --out is redirected")
 # Round 35's M-2 fix scoped clearing to --out's directory, which stopped the

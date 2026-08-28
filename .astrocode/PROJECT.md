@@ -554,7 +554,38 @@ customer a wrong answer.** v0.14.0 is the first release under it. Applying it pe
   stated every open item carries a `route`; **23 of 24** in the parity fixtures do not, and
   EXAMPLES made it load-bearing for the conversation layer, which would `KeyError`.
 
-### Shipped with these coverage gaps open (round 36, next cycle)
+### Round 36 backlog — CLOSED in v0.15.0, each mutation-proved
+
+All four coverage gaps listed below are now closed. Each fix was mutation-tested by
+execution, not by inspection:
+
+- REQ-088 **The `UNCONFIRMED` enumeration is deleted.** Round 36 found 6 of its 10
+  members deletable with the whole suite green, one live on a plain camlock email — a
+  future edit could have quietly presented a value the engine refused to confirm. The
+  set was CORRECT (exactly the schema enum minus `captured`); the problem was that a
+  list can drift unnoticed. So there is no list: `is_unconfirmed()` returns true for
+  anything that is not exactly `captured`, which means nothing to delete and a status
+  the schema adds later is unconfirmed by default — the safe direction. Coverage is
+  driven FROM the schema, so all eleven statuses plus an unheard-of one are checked
+  without editing the test. **Mutation-proved:** shrinking it back to a two-member list
+  fails NINE checks; the previous version caught it zero times.
+- REQ-089 **A state-record write failure is loud.** Round 36: making `write_state`
+  swallow `OSError` left `run_engine` exiting **0** with no state record, so a later
+  phase would act on the previous run's record — the R26-F1 family via state rather than
+  artifacts. **Mutation-proved:** the swallow now yields `exit=0` against an expected 1
+  and fails the check.
+- REQ-090 **No failure path leaves a 0-byte CaseState.** A zero-byte file is worse than
+  absence: it parses as neither valid JSON nor as nothing, and both reconciliation guards
+  read it before deciding. Three failure paths are now asserted to leave absence, not an
+  empty file.
+- REQ-091 **The falsy knowledge-extras variant is covered** — one layer below a check
+  that already worked. **Mutation-proved:** reintroducing `False` in the drop-tuple fails
+  two checks.
+
+Coverage 110 → 129. Suites at closure: completeness 184/0, selftest 129/129, parity 7/7,
+golden 2/2.
+
+### Round 36's gaps as they stood at v0.14.0 (now closed — kept for the record)
 
 Under the stopping rule these do not block: the shipped code is correct today and none
 would give a customer a wrong answer. They are IOUs, not unknowns.

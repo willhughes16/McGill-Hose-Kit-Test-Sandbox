@@ -45,11 +45,39 @@ from run_state import (  # noqa: E402
     read_state,
 )
 
-# Field statuses that are NOT a confirmed value. Named here so the wording can
-# never quietly imply certainty the engine refused to claim.
-UNCONFIRMED = {"reading", "assumed", "needs_unit", "missing", "conflict",
-               "missing_gender", "missing_spec", "size_confirm",
-               "configuration_confirm", "superseded"}
+# The ONE status that means "the engine committed to this value".
+CONFIRMED_STATUS = "captured"
+
+
+def is_unconfirmed(status):
+    """Whether a field status means the engine did NOT commit to the value.
+
+    Inverted deliberately: anything that is not exactly `captured` is
+    unconfirmed. Round 36 found the previous hand-written ten-member set had
+    6 members deletable with the whole suite green -- one of them live on a plain
+    camlock email -- so a future edit could quietly mark a field confirmed that
+    the engine had refused to confirm.
+
+    The set was CORRECT (exactly the schema's status enum minus `captured`);
+    the problem was that a list can drift and nothing noticed. So the list is
+    gone. There is nothing to delete, and a status the schema adds later is
+    unconfirmed by default -- the safe direction, since the alternative is
+    presenting a value as certain because we had not heard of its status yet.
+
+    Same inversion as `_spec_field_names()` (derive, do not enumerate) and the
+    `consumed` tracking (record, do not declare). Enumerations on the unsafe side
+    of a decision have caused the majority of this campaign's findings.
+    """
+    return str(status) != CONFIRMED_STATUS
+
+
+# Kept as a derived value for documentation and for tests that want the list.
+# It is computed, never maintained.
+UNCONFIRMED = frozenset(
+    s for s in ("reading", "assumed", "needs_unit", "missing", "conflict",
+                "missing_gender", "missing_spec", "size_confirm",
+                "configuration_confirm", "superseded")
+    if is_unconfirmed(s))
 
 PRIORITY_ORDER = ("blocking", "confirm", "must_acknowledge")
 
@@ -275,7 +303,7 @@ def render(case):
                 # including a truncated Component ID in a BOM. A shortened cell
                 # is fine; losing the data is not.
                 long_values.append((name, full))
-            mark = "" if status not in UNCONFIRMED else "  <-- NOT CONFIRMED"
+            mark = "  <-- NOT CONFIRMED" if is_unconfirmed(status) else ""
             ev_full = _safe(f.get("evidence"))
             ev = ev_full if len(ev_full) <= 48 else ev_full[:47] + "…"
             if ev != ev_full:
