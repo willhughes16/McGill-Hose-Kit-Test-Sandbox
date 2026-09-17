@@ -35,7 +35,6 @@ from __future__ import annotations
 import argparse
 import contextlib
 import datetime
-import hashlib
 import io
 import json
 import os
@@ -52,8 +51,8 @@ from email_to_bom import cli  # noqa: E402  (needs the sys.path lines above)
 import attachments  # noqa: E402  (kit-side: the engine reads none of them)
 from run_state import (  # noqa: E402
     ARTIFACTS, KIT_NAME, KIT_VERSION, StateError, all_artifacts, artifact_paths,
-    build_argv, derive_outcome, engine_commit, invalidate, make_invocation,
-    normalize_invocation, read_state, write_state,
+    build_argv, derive_outcome, engine_commit, idempotency_key, input_sha256,
+    invalidate, make_invocation, normalize_invocation, read_state, write_state,
 )
 
 # Past this size the engine's runtime grows superlinearly, and a kit run makes
@@ -102,18 +101,6 @@ def run_engine(invocation, as_json=True):
     return buf.getvalue(), engine_exit
 
 
-def sha256_of(path):
-    """Content hash of the RFQ, streamed. Returns None if it cannot be read."""
-    h = hashlib.sha256()
-    try:
-        with open(path, "rb") as fh:
-            for chunk in iter(lambda: fh.read(1 << 20), b""):
-                h.update(chunk)
-    except OSError:
-        return None
-    return h.hexdigest()
-
-
 def build_manifest(case, invocation, paths, engine_exit, started, elapsed_ms):
     """The run record: who produced this case, from what, and what it needs.
 
@@ -135,17 +122,12 @@ def build_manifest(case, invocation, paths, engine_exit, started, elapsed_ms):
     it.
     """
     commit, commit_error = engine_commit()
-    input_sha = sha256_of(invocation["input"])
+    input_sha = input_sha256(invocation["input"])
     evidence = attachments.scan(invocation["input"])
     # The outcome reads BOTH grounds: the engine's blocking items and the files
     # the engine could not see (REQ-097). The engine cannot raise an item about
     # an attachment it never opened, so the outcome has to carry it.
     outcome, outcome_reason = derive_outcome(case, evidence)
-    ident = json.dumps({"input_sha256": input_sha,
-                        "component_ids": invocation.get("component_ids") or [],
-                        "coc": bool(invocation.get("coc")),
-                        "config_dir": invocation.get("config_dir")},
-                       sort_keys=True)
     try:
         size = os.path.getsize(invocation["input"])
     except OSError:
@@ -159,7 +141,7 @@ def build_manifest(case, invocation, paths, engine_exit, started, elapsed_ms):
                    "provenance": "vendor/PROVENANCE.md"},
         "input": {"path": invocation["input"], "sha256": input_sha, "bytes": size},
         "invocation": invocation,
-        "idempotency_key": hashlib.sha256(ident.encode("utf-8")).hexdigest(),
+        "idempotency_key": idempotency_key(invocation, input_sha),
         "case_state": {"path": paths["case_state"],
                        "schema_version": case.get("schema_version")},
         "engine_exit": engine_exit,

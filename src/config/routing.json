@@ -1,0 +1,47 @@
+{
+  "_purpose": "Maps the role and owner keys the ENGINE emits to an addressee Body can actually message. Consulted, never invented: a key with no entry, or an entry with no address, renders as NOT ROUTABLE and names the key. The kit stays offline — it resolves the key to a display name and an address string, and Body does the delivering.",
+  "_why_nulls": "These addresses ship EMPTY on purpose. Inventing a Teams group id or a mailbox would be fabrication of exactly the kind this kit exists to prevent, and a wrong assignee is worse than a visible gap: the case goes to someone who ignores it and nobody learns it was misrouted. Fill them in for a deployment; until then every route says NOT ROUTABLE and names the key that needs filling.",
+  "_keys": "Three vocabularies share this table. routing.recommendation (3 values) and open_items[].route (4 values) are schema enums — if the engine gains a value it will be UNKNOWN here, which is the loud direction. checkpoints[].owner is free text the engine writes, so those keys must match its strings exactly.",
+  "addressees": {
+    "inside_sales_review": {
+      "display": "Inside Sales — review queue",
+      "channel": null,
+      "address": null
+    },
+    "inside_sales": {
+      "display": "Inside Sales",
+      "channel": null,
+      "address": null
+    },
+    "order_desk": {
+      "display": "Order Desk",
+      "channel": null,
+      "address": null
+    },
+    "account_owner": {
+      "display": "Account Owner",
+      "channel": null,
+      "address": null
+    },
+    "catalog_lookup": {
+      "display": "Catalog / product data",
+      "channel": null,
+      "address": null
+    },
+    "QC Department": {
+      "display": "QC Department",
+      "channel": null,
+      "address": null
+    },
+    "Sales + Production Manager + Quality Team": {
+      "display": "Sales + Production Manager + Quality Team",
+      "channel": null,
+      "address": null
+    },
+    "Inside Sales": {
+      "display": "Inside Sales",
+      "channel": null,
+      "address": null
+    }
+  }
+}

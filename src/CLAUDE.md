@@ -92,6 +92,15 @@ line:
   the run manifest) and stops there. Reading one yourself would put case data
   into the answer from outside the engine, with none of its guarantees, and every
   open item below it was derived without that file. Tell the operator to open it.
+- **Never edit the response inside `review_request.md`.** The reply is embedded
+  verbatim so the reviewer approves the exact bytes that would be sent; the script
+  refuses to render if `reply.md` is not this case's reply. An edit belongs in the
+  reviewer's answer, not in the document they are approving.
+- **Never invent an addressee.** `config/routing.json` maps the engine's role and
+  owner keys to real addresses. A key with no entry, or no address, renders as NOT
+  ROUTABLE and names the key — it must NOT fall back to inside sales. A wrong
+  assignee is worse than a visible gap: the case lands with someone who ignores it
+  and nobody learns it was misrouted.
 - **Never read `outcome: complete` as "ready to send".** It means only that
   nothing in the case requires an answer before it can move. Every case this kit
   produces is a draft a human reviews; `complete` versus `needs_human_input` is a
@@ -110,6 +119,7 @@ line:
 | `_report/reply.md` | **What you send, as the message body.** The whole case inline: request class and urgency, open items grouped by priority (with a `route` on the items that carry one — it is optional and most do not), every field with its status and evidence, the draft BOM, harness-held checkpoints, corrections found in the thread, and knowledge provenance. |
 | `_report/case_state.json` | The machine contract a conversation layer consumes. Conforms to `schemas/case_state.schema.json`. **Not attached** — cite it, do not send it. |
 | `_report/bom_draft.md` | The engine's own verbatim rendering, byte-identical to what the source engine prints. A **lossy** view kept for parity, not for sending. |
+| `_report/review_request.md` | **What the REVIEWER reads.** The decision being asked for (approve / edit / reject / reassign / escalate), the outcome and its grounds, who the case routes to with each owner resolved through `config/routing.json`, and the proposed response **embedded verbatim**. Send this to the reviewer; send `reply.md` only once they approve. |
 | `_report/run_manifest.json` | **The run record** a conversation layer reads: which kit version and which engine commit produced this case, the input's sha256 and an `idempotency_key` derived from it, the `outcome` (`complete` / `needs_human_input`), and `evidence_not_read` — the files the customer attached that the engine never opened. Written by the extract phase. |
 | `_report/state.json` | The run's `invocation` record (written by prepare, read by the later phases) plus the extract result. Not a deliverable. |
 

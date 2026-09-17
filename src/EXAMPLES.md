@@ -17,6 +17,7 @@ Directly, without Astro (the kit ships no console script):
 python3 scripts/run_engine.py --in rfq.eml --out _report/case_state.json --state _report/state.json
 python3 generate_report.py --out _report/bom_draft.md --state _report/state.json
 python3 scripts/render_reply.py --out _report/reply.md --state _report/state.json
+python3 scripts/render_review.py --out _report/review_request.md --state _report/state.json
 ```
 
 ## Examples
@@ -37,7 +38,7 @@ python3 scripts/render_reply.py --out _report/reply.md --state _report/state.jso
    the request is summarised: what was understood, what must be answered, where
    to route it.
 
-**Produces:** `_report/reply.md` (what you send), `_report/case_state.json`, `_report/bom_draft.md`, `_report/run_manifest.json`
+**Produces:** `_report/review_request.md` (what the reviewer reads), `_report/reply.md` (what is sent once they approve), `_report/case_state.json`, `_report/bom_draft.md`, `_report/run_manifest.json`
 
 For the shipped sample (a 4in EPDM suction hose assembly, couplers named but no
 length or temperature stated) the engine classifies it `hose_assembly`, captures
@@ -130,6 +131,15 @@ order.
   drops `fields`, `routing`, `knowledge` and `supersedes`, and keeps only the code
   and ask from each open item. Anything programmatic must read the JSON — which is why
   the reply states it in words instead of attaching JSON.
+- **Two documents, two readers.** `review_request.md` is for the Inside Sales
+  reviewer: the decision, the grounds, the owners, and the proposed response
+  embedded verbatim. `reply.md` is what gets sent once they approve. The review
+  request is a superset by construction — it CONTAINS the reply — so a reviewer
+  can never approve text they were not shown.
+- **Owners are resolved, never invented.** `config/routing.json` ships with every
+  key the engine emits and every address empty, on purpose. Until they are filled
+  in, every owner renders NOT ROUTABLE and names the key. Inventing a Teams group
+  would be fabrication, and a wrong assignee is worse than a visible gap.
 - **The outcome is in the manifest, not in the exit code.**
   `_report/run_manifest.json` carries `outcome: needs_human_input` when a blocking
   open item exists **or the customer attached a file the engine never read**, and

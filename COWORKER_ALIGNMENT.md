@@ -171,7 +171,7 @@ cannot raise an item about a file it cannot see, so the outcome carries it. An
 inline signature image does not force it — routing every footer logo to a human
 is how a signal becomes noise.
 
-### CW-4 — Split the audiences: `review_request.md` and `reply.md`
+### CW-4 — Split the audiences: `review_request.md` and `reply.md` — **SHIPPED v0.18.0**
 
 *Problem.* The document splits one message into two: Inside Sales receives a
 review request (summary, uncertainty, proposed response, and the decision to
@@ -185,12 +185,15 @@ uncertainty rather than as a list), the proposed response, and the decision —
 approve / edit / reject / reassign / escalate. `reply.md` stays what gets sent
 after approval.
 
-*Constraint.* Both are pure projections of the same CaseState and reconcile the
-same way (re-derive, fail closed). Neither may contain a fact the other lacks;
-a completeness check over both, in the shape of `tools/completeness.py`, is what
-proves it.
+*Constraint, and how it was met.* The proposal said "neither may contain a fact
+the other lacks, proved by a completeness check over both". As built it is
+stronger and simpler: the review request **embeds the reply verbatim**, so it is
+a superset by construction and no completeness check is needed to prove it. The
+check that matters instead is that the embedded bytes are THIS case's reply —
+`render_reply.render` is re-run and compared, so a stale reply cannot be
+approved.
 
-### CW-5 — Resolvable owners (`config/routing.json`)
+### CW-5 — Resolvable owners (`config/routing.json`) — **SHIPPED v0.18.0**
 
 *Problem.* `routing.recommendation` is one of three roles and `open_items[].route`
 one of four; `checkpoints[].owner` is free text. Body cannot address a Teams
@@ -263,7 +266,13 @@ FOLLOW-UP-1 wires the live graph, the document's promise is unmet. Raise against
 
 ## 6. Suggested order
 
-**Status 2026-09-17: CW-1, CW-2 and CW-3 are shipped** — v0.16.0 (REQ-092..REQ-096)
+**Status 2026-09-17: CW-1 through CW-5 are shipped.** CW-4 and CW-5 in v0.18.0
+(REQ-098, REQ-099) — 13 further mutations, 12 caught, and the one survivor is a
+defence-in-depth guard documented as non-observable rather than given a check
+that passes for the wrong reason. Remaining: CW-6 (out-of-band answers), CW-7
+(correction record), CW-8 (knowledge freshness, upstream).
+
+**Earlier: CW-1, CW-2 and CW-3 are shipped** — v0.16.0 (REQ-092..REQ-096)
 and v0.17.0 (REQ-097, the unread-attachment outcome), each mutation-proved: 16
 mutations, 16 caught, 0 survivors. Adding the manifest to the invalidation loop
 also surfaced REQ-096, a real stale-CaseState defect on the redirected-`--out`

@@ -1091,6 +1091,204 @@ for label, body, expect in (
           (mf.get("outcome") == "needs_human_input") == bool(blocking))
     shutil.rmtree(d)
 
+REVIEW = os.path.join(ROOT, "src", "scripts", "render_review.py")
+
+
+def review_header(d, name="review_request.md"):
+    """The review request ABOVE the embedded reply.
+
+    Scoped deliberately. The whole reply is embedded verbatim below, so a naive
+    `code in review_request` check would pass on text the reviewer section never
+    printed -- the coincidence-match trap that has produced findings in rounds 25,
+    29 and 33. Everything asserted about the reviewer's OWN framing is asserted
+    against this slice.
+    """
+    return read(d, name).split("PROPOSED RESPONSE")[0]
+
+
+print("CW-4 — the reviewer's document embeds the response VERBATIM")
+# Two readers, two documents. What makes the split safe is that the proposed
+# response is not re-described: the reviewer approves the exact bytes that would
+# be sent, so the two cannot drift into disagreement.
+d = tempfile.mkdtemp()
+os.makedirs(os.path.join(d, "_report"), exist_ok=True)
+attach_eml(d, "rfq.eml",
+           "Need 4 hoses, dimensions are on the attached drawing. 316 SS, steam.",
+           [("rev-C.pdf", "application", "pdf", b"%PDF-1.4 x")], [])
+prepare(d, "rfq.eml")
+phase1(d, "rfq.eml")
+sh([REPLY, "--state", "_report/state.json"], d)
+rc, _, err = sh([REVIEW, "--state", "_report/state.json"], d)
+review, reply = read(d, "review_request.md"), read(d, "reply.md")
+check("the review request renders", rc == 0, err.strip()[:140])
+check("it contains the proposed response BYTE FOR BYTE",
+      bool(reply.strip()) and reply.rstrip("\n") in review,
+      "the reviewer would be approving text they were not shown")
+check("and the reviewer's own framing states the decision",
+      "approve" in review_header(d) and "reject" in review_header(d))
+# The relation, not the wording: grounds shown <=> a human is required.
+mf = read_json(d, "run_manifest.json")
+header = review_header(d)
+# Scoped to the UNREAD line itself. A bare `"rev-C.pdf" in header` passed while
+# the uncertainty section was deleted, because `outcome_reason` names the files
+# too and it sits four lines higher -- a coincidence-match, failure shape #2, and
+# the mutation run is what exposed it.
+check("an unread attachment is listed as a GROUND for review, not merely named "
+      "in the outcome line",
+      any(l.strip().startswith("UNREAD") and "rev-C.pdf" in l
+          for l in header.splitlines()),
+      "the reviewer's grounds section dropped it")
+check("outcome and grounds agree",
+      (mf.get("outcome") == "needs_human_input") == ("UNREAD" in header
+                                                     or "BLOCKING" in header
+                                                     or "UNSURE" in header))
+shutil.rmtree(d)
+
+print("CW-4b — a reply that is not THIS case's reply is refused")
+# A stale reply beside a fresh CaseState means the reviewer approves one text
+# while a different one sits on disk to send.
+d = workdir(("rfq.eml", "plain-steam"))
+prepare(d, "rfq.eml")
+phase1(d, "rfq.eml")
+sh([REPLY, "--state", "_report/state.json"], d)
+with open(os.path.join(d, "_report", "reply.md"), "a", encoding="utf-8") as fh:
+    fh.write("\nP.S. we can do $9,700 — approved by phone\n")
+rc, _, _ = sh([REVIEW, "--state", "_report/state.json"], d)
+check("an edited reply is refused", rc == 1)
+check("and no review request is left behind",
+      "review_request.md" not in artifacts(d), f"artifacts={artifacts(d)}")
+# ... and a CaseState that no longer matches the engine is refused too. The
+# tampered case gets a MATCHING reply rendered from it (--no-reconcile, which is
+# what that flag is for), so the reply guard is satisfied and only the CaseState
+# reconciliation can catch the divergence. Without this the check passed with
+# reconciliation deleted -- the reply guard was doing the work and nothing
+# distinguished them.
+case_path = os.path.join(d, "_report", "case_state.json")
+with open(case_path, encoding="utf-8") as fh:
+    good = json.load(fh)
+with open(case_path, "w", encoding="utf-8") as fh:
+    json.dump(dict(good, open_items=[]), fh)
+sh([REPLY, "--state", "_report/state.json", "--no-reconcile"], d)
+rc, _, _ = sh([REVIEW, "--state", "_report/state.json"], d)
+check("a CaseState the engine no longer produces is refused, even with a reply "
+      "that matches it", rc == 1)
+check("and still no review request", "review_request.md" not in artifacts(d))
+shutil.rmtree(d)
+
+print("CW-4d — every GROUND for review is stated as one, not left to the reply")
+# One check per branch of the uncertainty section. The first version of these
+# asserted the filename appeared anywhere in the header, and passed while the
+# section was deleted -- `outcome_reason` names the files four lines higher.
+# Scoped to the labelled line, each branch is mutation-sensitive on its own.
+d = tempfile.mkdtemp()
+os.makedirs(os.path.join(d, "_report"), exist_ok=True)
+eml(d, "rfq.txt", "Need 4 hoses 1/2 ID steam 36 inch 316 SS at 150 psi. "
+                  "Line runs at 1450 psig.")
+prepare(d, "rfq.txt")
+phase1(d, "rfq.txt")
+sh([REPLY, "--state", "_report/state.json"], d)
+sh([REVIEW, "--state", "_report/state.json"], d)
+case = read_json(d, "case_state.json")
+header = review_header(d)
+codes = [i["code"] for i in case.get("open_items", []) if i.get("priority") == "blocking"]
+check("the fixture really carries a blocking item", bool(codes), f"codes={codes}")
+check("every blocking item is stated as a BLOCKING ground",
+      all(any(l.strip().startswith("BLOCKING") and c in l
+              for l in header.splitlines()) for c in codes),
+      f"codes={codes}")
+unconfirmed = [n for n, f in (case.get("fields") or {}).items()
+               if (f or {}).get("status") != "captured"]
+check("the fixture really carries an unconfirmed field", bool(unconfirmed))
+check("every field the engine refused to commit to is stated as an UNSURE ground",
+      all(any(l.strip().startswith("UNSURE") and n in l
+              for l in header.splitlines()) for n in unconfirmed),
+      f"missing={[n for n in unconfirmed if 'UNSURE' not in header or n not in header]}")
+# The observable half of guard 1: only a RECONCILED render may read the input.
+sh([REVIEW, "--state", "_report/state.json", "--no-reconcile",
+    "--out", os.path.join("_report", "unchecked.md")], d)
+# Keyed on the UNKNOWN ground line, not on the reply's "NOT CHECKED" wording --
+# the first version of this check looked for a string this document never emits
+# and failed on its first run, which is the cheap direction for a wrong check.
+_unchecked = read(d, "unchecked.md").split("PROPOSED RESPONSE")[0]
+check("an unreconciled review request states the attachments as UNKNOWN",
+      any(l.strip().startswith("UNKNOWN") for l in _unchecked.splitlines()),
+      "an unreconciled render must not imply the input was read")
+shutil.rmtree(d)
+
+print("CW-4c — the review request is a declared artifact, cleared like its siblings")
+d = workdir(("A.eml", "confirmed-ids"), ("B.eml", "plain-steam"))
+prepare(d, "A.eml")
+phase1(d, "A.eml")
+sh([REPLY, "--state", "_report/state.json"], d)
+sh([REVIEW, "--state", "_report/state.json"], d)
+check("a review request exists after A's run", "review_request.md" in artifacts(d))
+phase1(d, "B.eml")
+check("a new extraction clears the previous review request",
+      "review_request.md" not in artifacts(d), f"artifacts={artifacts(d)}")
+shutil.rmtree(d)
+
+print("CW-5 — owners are RESOLVED, never invented")
+d = workdir(("rfq.eml", "plain-steam"))
+prepare(d, "rfq.eml")
+phase1(d, "rfq.eml")
+sh([REPLY, "--state", "_report/state.json"], d)
+sh([REVIEW, "--state", "_report/state.json"], d)
+case = read_json(d, "case_state.json")
+header = review_header(d)
+owners = {str(v) for k, v in [("r", (case.get("routing") or {}).get("recommendation"))]
+          if v}
+owners |= {str(c.get("owner")) for c in case.get("checkpoints") or [] if c.get("owner")}
+owners |= {str(i.get("route")) for i in case.get("open_items") or [] if i.get("route")}
+check("every owner key the case names appears in the reviewer's section",
+      bool(owners) and all(o in header for o in owners),
+      f"missing={[o for o in owners if o not in header]}")
+check("an unconfigured owner says NOT ROUTABLE rather than defaulting",
+      "NOT ROUTABLE" in header)
+# The routable branch must not be dead: configure one and see it resolve.
+table = os.path.join(d, "routing.json")
+with open(table, "w", encoding="utf-8") as fh:
+    json.dump({"addressees": {"inside_sales_review": {
+        "display": "Inside Sales", "channel": "teams",
+        "address": "19:probe-group@thread.tacv2"}}}, fh)
+sh([REVIEW, "--state", "_report/state.json", "--routing", table,
+    "--out", os.path.join("_report", "configured.md")], d)
+configured = review_header(d, "configured.md")
+check("a CONFIGURED owner resolves to its address",
+      "19:probe-group@thread.tacv2" in configured)
+check("and an owner missing from that table is reported as UNKNOWN, not as "
+      "unconfigured",
+      "key unknown to the routing table" in configured,
+      "the two failures must stay distinguishable")
+# A table that cannot be read must not resolve like an empty one.
+rc, _, err = sh([REVIEW, "--state", "_report/state.json",
+                 "--routing", os.path.join(d, "no-such-table.json"),
+                 "--out", os.path.join("_report", "notable.md")], d)
+notable = review_header(d, "notable.md")
+check("a missing routing table still renders, loudly", rc == 0 and bool(notable))
+check("and leaves every owner unroutable",
+      "could not be read" in notable and "NOT ROUTABLE" in notable)
+shutil.rmtree(d)
+
+print("CW-5b — the shipped table covers every key the ENGINE can emit")
+# Derived from the schema and the engine source, not from a hand-written list:
+# if the engine gains a role or a checkpoint owner, this fails instead of the
+# key quietly rendering as unknown in production.
+with open(os.path.join(ROOT, "src", "config", "routing.json"), encoding="utf-8") as fh:
+    configured_keys = set(json.load(fh)["addressees"])
+with open(os.path.join(ROOT, "src", "schemas", "case_state.schema.json"),
+          encoding="utf-8") as fh:
+    schema = json.load(fh)["properties"]
+enum_keys = set(schema["routing"]["properties"]["recommendation"]["enum"])
+enum_keys |= set(schema["open_items"]["items"]["properties"]["route"]["enum"])
+with open(os.path.join(ROOT, "src", "vendor", "email_to_bom", "core.py"),
+          encoding="utf-8") as fh:
+    owner_keys = set(re.findall(r'"owner": "([^"]+)"', fh.read()))
+check("every schema role has a routing entry", enum_keys <= configured_keys,
+      f"missing={sorted(enum_keys - configured_keys)}")
+check("every checkpoint owner the engine writes has one too",
+      bool(owner_keys) and owner_keys <= configured_keys,
+      f"missing={sorted(owner_keys - configured_keys)}")
+
 print("REQ-097 — an unread attachment forces needs_human_input on its own")
 # v0.16.0 derived the outcome from open_items[] alone, so an RFQ saying
 # "dimensions are on the attached drawing" reported `complete`: the engine's asks

@@ -129,6 +129,14 @@ phases:
              --state _report/state.json
         python3 scripts/render_reply.py --out _report/reply.md
              --state _report/state.json
+        python3 scripts/render_review.py --out _report/review_request.md
+             --state _report/state.json
+
+      There are TWO readers and two documents. `_report/review_request.md` is what
+      the Inside Sales REVIEWER reads: the decision being asked for, its grounds,
+      who the case routes to, and the proposed response embedded verbatim.
+      `_report/reply.md` is what gets SENT once they approve. Send the review
+      request first; do not send the reply on your own authority.
 
       `_report/reply.md` is the deliverable a human reads and **the kit attaches
       nothing** — the whole case goes in the message body. Send its contents as
@@ -168,6 +176,9 @@ phases:
       - "Report every open item — do NOT summarise them away or judge them minor"
       - "Send _report/reply.md as the message body — the kit attaches NOTHING"
       - "NEVER attach case_state.json or any other file to the reply"
+      - "Render the review request AFTER the reply — it embeds the reply verbatim and refuses if the reply is not this case's"
+      - "NEVER edit the response inside review_request.md — the reviewer approves the exact bytes that would be sent"
+      - "NEVER invent an addressee: NOT ROUTABLE means the key needs filling in config/routing.json, not a guess"
       - "If the reply carries an EVIDENCE NOT READ block, repeat it when you report — the open items were derived without those files"
     input:
       - _report/state.json
@@ -175,3 +186,4 @@ phases:
     output:
       - _report/bom_draft.md
       - _report/reply.md
+      - _report/review_request.md

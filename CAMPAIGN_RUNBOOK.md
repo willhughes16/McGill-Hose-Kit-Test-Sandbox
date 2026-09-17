@@ -19,8 +19,8 @@ both rollbacks worked.
 
 ## STATE AS OF THIS FILE (2026-09-17 — all work is MERGED to `main`)
 
-`main` carries PR #1 (`dc0a05e`), the runbook refresh, and **v0.17.0**. **`kit.json` and
-the built `dist/kit.zip` are at v0.17.0 and current** — unlike the last two times this
+`main` carries PR #1 (`dc0a05e`), the runbook refresh, and **v0.18.0**. **`kit.json` and
+the built `dist/kit.zip` are at v0.18.0 and current** — unlike the last two times this
 file was written, the artifact is not stale.
 
 What landed since round 36, in order:
@@ -49,10 +49,17 @@ What landed since round 36, in order:
 - **v0.17.0 — REQ-097**: an unread attachment forces `outcome: needs_human_input` on
   its own. The operator's decision on the question v0.16.0 left open. An inline
   signature image does not force it; a scan that did not complete does.
+- **v0.18.0 — REQ-098/099 (CW-4, CW-5)**: `scripts/render_review.py` writes
+  `_report/review_request.md` — the reviewer's document, with the proposed response
+  EMBEDDED VERBATIM so a reviewer approves the exact bytes that would be sent, and
+  every owner resolved through `config/routing.json`, which ships with all addresses
+  empty and renders NOT ROUTABLE rather than guessing. A full run now costs FIVE engine
+  passes (extract 1, generate_report 2, render_reply 1, render_review 1).
 
-Suites at v0.17.0: selftest **168/168**, parity 7/7 (zero normalizations), golden 2/2,
+Suites at v0.18.0: selftest **192/192**, parity 7/7 (zero normalizations), golden 2/2,
 completeness 184 combinations / 0 violations, manifest valid.
-Mutation runs on the new work: **16 mutations, 16 caught, 0 survivors.**
+Mutation runs on the new work: **29 attempted, 28 caught**; the survivor is the
+defence-in-depth guard noted below.
 
 ### Nothing is carried forward as an open finding
 
@@ -60,10 +67,17 @@ Round 36's four open items are all closed and mutation-proved. There is no backl
 clear before round 37 — which is unusual for this campaign, and means the round starts
 clean rather than against a fix pass.
 
-### One thing deliberately left unbuilt — do not report it as a defect
+### Deliberately left unbuilt — do not report as a defect
 
-**`CW-4`…`CW-8` are specified and unbuilt.** See `COWORKER_ALIGNMENT.md`. Their absence
-is not a defect.
+**`CW-6`…`CW-8` are specified and unbuilt.** See `COWORKER_ALIGNMENT.md`. Their absence
+is not a defect. CW-4 and CW-5 shipped in v0.18.0.
+
+**One guard is documented as defence-in-depth, not as covered.**
+`render_review.py`'s CaseState reconciliation cannot be isolated by a test — the reply
+guard refuses the same pairs, and REQ-093 stops a forged reply carrying a scanned
+attachment record. Its docstring says so. A verifier finding "this check is not
+covered" is finding something the code already admits; finding a pair that slips past
+BOTH guards would be a real one.
 
 (The other item that stood here — whether an unread attachment should force
 `needs_human_input` — was **decided by the operator on 2026-09-17** and is now REQ-097,

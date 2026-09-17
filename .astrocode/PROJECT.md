@@ -679,8 +679,51 @@ features are now in:
   files without naming them fails 1, and not passing the evidence into the derivation
   fails 2.
 
-Suites at closure: completeness 184/0, selftest **168/168**, parity 7/7, golden 2/2,
-manifest valid. Mutation runs: **16 mutations, 16 caught, 0 survivors.**
+- REQ-098 **The reviewer gets their own document, and it EMBEDS the response (CW-4,
+  v0.18.0).** The Coworker document splits one message in two: Outside Sales receives
+  the guidance, Inside Sales receives a review request with the summary, the
+  uncertainty and the proposed response, and decides. Until now the kit emitted one
+  document trying to be both — `reply.md` is written for the person who receives the
+  answer, and a reviewer had to infer the decision from it.
+  `scripts/render_review.py` writes `_report/review_request.md`: the decision, the
+  outcome and its grounds (blocking items, unread attachments, and every field the
+  engine refused to commit to), who it routes to, and the proposed response **embedded
+  verbatim**. Embedding rather than re-describing is what makes the split safe: the
+  reviewer approves the exact bytes that would be sent, and the two documents cannot
+  drift, because one contains the other. Two guards fail closed — the CaseState is
+  re-derived, and `reply.md` must equal what `render_reply.render` produces for this
+  case *right now*, compared through the renderer itself rather than as prose.
+  **Mutation-proved:** summarising instead of embedding fails 1 check, removing the
+  stale-reply guard fails 2, and each of the four uncertainty branches fails its own.
+- REQ-099 **Owners are resolved, never invented (CW-5, v0.18.0).**
+  `config/routing.json` maps the three `routing.recommendation` values, the four
+  `open_items[].route` values and the three `checkpoints[].owner` strings the engine
+  writes to an addressee. A key with no entry, or an entry with no address, renders
+  NOT ROUTABLE and names the key — it does **not** fall back to inside sales. A wrong
+  assignee is worse than a visible gap: the case lands with someone who ignores it and
+  nobody learns it was misrouted. The two failures stay distinguishable: `unmapped`
+  means the ENGINE grew a role the table has never heard of, `unconfigured` means a
+  deployment TODO. **The table ships with every address empty on purpose** — inventing
+  a Teams group id would be the fabrication this kit exists to prevent. A selftest
+  check derives the required keys from the schema enums and from `core.py` itself, so
+  a new engine role fails the suite rather than appearing as `unmapped` in production.
+  **Mutation-proved:** a fallback to inside sales fails 1, reporting unconfigured as
+  routable fails 2, an unreadable table resolving like an empty one fails 1, dropping
+  checkpoint owners fails 2.
+- **One guard is documented as defence-in-depth rather than claimed as covered.**
+  `render_review.py`'s CaseState reconciliation cannot be isolated by a test: for
+  content divergence the reply guard refuses the same pairs, and a reply forged to
+  match a tampered case cannot carry a scanned attachment record because REQ-093 only
+  lets a reconciled render scan the input. Two attempts to write a check for it both
+  ended up exercising the reply guard instead. Its observable half — that an
+  unreconciled render says the attachments are UNKNOWN — IS asserted. The docstring
+  says all of this, rather than implying a coverage the suite does not have.
+
+Suites at closure: completeness 184/0, selftest **192/192**, parity 7/7, golden 2/2,
+manifest valid. Mutation runs across CW-1..CW-5: **29 attempted, 28 caught**, and the
+one survivor (M19) is the defence-in-depth guard above, proven non-observable and
+documented as such rather than papered over with a check that passes for the wrong
+reason.
 
 The remaining five features (CW-4 review-request artifact, CW-5 resolvable owners,
 CW-6 out-of-band answers, CW-7 correction record, CW-8 knowledge freshness) are

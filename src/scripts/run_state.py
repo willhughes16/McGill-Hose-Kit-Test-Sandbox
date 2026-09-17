@@ -23,6 +23,7 @@ cannot guarantee the old artifacts are gone, the run must say so and stop.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -39,6 +40,9 @@ ARTIFACTS = {
     # The run record: who produced this case, from what, and whether it needs a
     # human. Not a deliverable -- the Body/Compute contract's half of the run.
     "manifest": os.path.join("_report", "run_manifest.json"),
+    # What the REVIEWER reads: the decision, the grounds for it, who it routes
+    # to, and the proposed response embedded verbatim (CW-4).
+    "review_request": os.path.join("_report", "review_request.md"),
 }
 
 # The engine invocation's shape. Adding an argument means adding it here.
@@ -55,7 +59,7 @@ INVOCATION_KEYS = ("input", "component_ids", "coc", "config_dir")
 # copy can be: `tools/selftest.py` asserts it equals `kit.json`, so a version
 # bump that forgets this line fails the suite instead of mis-attributing a case.
 KIT_NAME = "mcgill-email-to-bom"
-KIT_VERSION = "0.17.0"
+KIT_VERSION = "0.18.0"
 
 # The outcome vocabulary at the Body/Compute boundary (CW-3).
 #
@@ -131,6 +135,37 @@ def derive_outcome(case, evidence=None):
         return OUTCOME_COMPLETE, (
             f"{len(items)} open item(s), none blocking a quote; no unread attachments")
     return OUTCOME_COMPLETE, "no open items; no unread attachments"
+
+
+def input_sha256(path):
+    """Content hash of the RFQ, streamed. None if it cannot be read."""
+    h = hashlib.sha256()
+    try:
+        with open(path, "rb") as fh:
+            for chunk in iter(lambda: fh.read(1 << 20), b""):
+                h.update(chunk)
+    except OSError:
+        return None
+    return h.hexdigest()
+
+
+def idempotency_key(invocation, input_sha):
+    """The identity of a RUN, for recognising a retry. ONE expression of it.
+
+    Hashes the input's CONTENT plus the flags, deliberately not the input's path:
+    the same email saved under a second name is the same case, and Body must be
+    able to recognise a retry without inventing an identity for it.
+
+    It lives here, beside the invocation record, because two sites need it -- the
+    manifest writes it and the review request cites it -- and a key computed
+    twice is a key that can be computed differently.
+    """
+    ident = json.dumps({"input_sha256": input_sha,
+                        "component_ids": (invocation or {}).get("component_ids") or [],
+                        "coc": bool((invocation or {}).get("coc")),
+                        "config_dir": (invocation or {}).get("config_dir")},
+                       sort_keys=True)
+    return hashlib.sha256(ident.encode("utf-8")).hexdigest()
 
 
 def engine_commit():
