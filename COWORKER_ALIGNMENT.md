@@ -255,7 +255,7 @@ consume one as a regression fixture. This is the direct answer to *"reviewed
 corrections may become test cases, but never alter production behaviour
 automatically."*
 
-### CW-8 — Knowledge freshness (upstream)
+### CW-8 — Knowledge freshness (upstream) — **SHIPPED v0.20.0**
 
 Evolution 4 requires "each value includes its source and freshness". Today
 `knowledge.lookups[]` logs op, argument, outcome, tier, citation and elapsed ms,
@@ -279,7 +279,13 @@ FOLLOW-UP-1 wires the live graph, the document's promise is unmet. Raise against
 
 ## 6. Suggested order
 
-**Status 2026-09-17: CW-1 through CW-7 are shipped.** CW-6 and CW-7 in v0.19.0
+**Status 2026-09-17: ALL EIGHT are shipped.** CW-8 in v0.20.0 (REQ-104) — built
+upstream in `ScaleUpLabs/McGill-Core` (`6b0a897`) because `knowledge.py` is
+vendored, then re-vendored with parity staying 7/7 byte-identical. It ships
+DORMANT: the kit's default knowledge source performs no lookups, so nothing in a
+real run carries a `freshness` until FOLLOW-UP-1 wires the graph.
+
+**Earlier: CW-1 through CW-7 are shipped.** CW-6 and CW-7 in v0.19.0
 (REQ-100..REQ-103). CW-6's own warning below — that it was the feature most
 likely to fail a verification round — was borne out in miniature: its round-trip
 guard survived the first mutation run because no fixture tripped it, and the

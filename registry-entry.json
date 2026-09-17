@@ -2,7 +2,7 @@
   "id": "mcgill-email-to-bom",
   "name": "McGill Email to BOM",
   "description": "Read an inbound customer RFQ email and produce a deterministic CaseState plus a draft bill of materials, with every missing, ambiguous or unsafe item raised as an explicit open item. Drafts only - a human reviews and commits in the ERP.",
-  "version": "0.19.0",
+  "version": "0.20.0",
   "tags": [
     "rfq",
     "bill-of-materials",
@@ -73,7 +73,7 @@
   },
   "estimated_duration": "seconds for a typical email; minutes for a very large thread (>100 KB)",
   "download_url": "",
-  "sha256": "91977313b367925a3e5fdccd25d1fb15cbdc501c373fe623f97fa88743fdbfe3",
+  "sha256": "e83479435614670eaec2be83410a6641d58b21087f4185c2e8e1e9e0b36338b6",
   "contract_version": "^1.0.0",
   "manifest_version": 4
 }

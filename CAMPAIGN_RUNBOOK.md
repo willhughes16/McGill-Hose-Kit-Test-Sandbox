@@ -11,7 +11,9 @@ both rollbacks worked.
 
 > **READ THIS BEFORE PLANNING A ROUND: the engine underneath changed.** Rounds 25–36
 > all ran against the engine as vendored at `b15b23d`. The kit now vendors
-> **`ae4411f`** — one commit later, and a behavioural one ("size is not a length").
+> **`6b0a897`**, whose engine BEHAVIOUR is that of `ae4411f` — one behavioural commit
+> later than any round has seen ("size is not a length"), plus a freshness change that
+> left parity byte-identical.
 > **No round has ever tested the engine this kit currently ships.** That is the single
 > most important fact in this file, and it is why round 37 exists.
 
@@ -19,8 +21,8 @@ both rollbacks worked.
 
 ## STATE AS OF THIS FILE (2026-09-17 — all work is MERGED to `main`)
 
-`main` carries PR #1 (`dc0a05e`), the runbook refresh, and **v0.19.0**. **`kit.json` and
-the built `dist/kit.zip` are at v0.19.0 and current** — unlike the last two times this
+`main` carries PR #1 (`dc0a05e`), the runbook refresh, and **v0.20.0**. **`kit.json` and
+the built `dist/kit.zip` are at v0.20.0 and current** — unlike the last two times this
 file was written, the artifact is not stale.
 
 What landed since round 36, in order:
@@ -49,6 +51,10 @@ What landed since round 36, in order:
 - **v0.17.0 — REQ-097**: an unread attachment forces `outcome: needs_human_input` on
   its own. The operator's decision on the question v0.16.0 left open. An inline
   signature image does not force it; a scan that did not complete does.
+- **v0.20.0 — REQ-104 (CW-8)**: the engine was re-vendored again, at `6b0a897`, for
+  knowledge freshness. **Parity stayed 7/7 byte-identical**, so unlike the `ae4411f`
+  re-vendor this one provably does not change the kit's output — only `knowledge.py`
+  differs, and the kit's default source never calls it.
 - **v0.19.0 — REQ-100..103 (CW-6, CW-7)**: `scripts/apply_answers.py` folds a
   reviewer's out-of-thread answer into the case TEXT as an operator addendum — never
   into the CaseState — and everything downstream marks which values came from an
@@ -64,9 +70,9 @@ What landed since round 36, in order:
   empty and renders NOT ROUTABLE rather than guessing. A full run now costs FIVE engine
   passes (extract 1, generate_report 2, render_reply 1, render_review 1).
 
-Suites at v0.19.0: selftest **218/218**, parity 7/7 (zero normalizations), golden 2/2,
+Suites at v0.20.0: selftest **224/224**, parity 7/7 (zero normalizations), golden 2/2,
 completeness 184 combinations / 0 violations, manifest valid.
-Mutation runs on the new work: **41 attempted, 40 caught**; the survivor is the
+Mutation runs on the new work: **50 attempted, 49 caught**; the survivor is the
 defence-in-depth guard noted below. Two of the suite's OWN checks were exposed as
 unable to fail by these runs, and rewritten.
 
@@ -76,11 +82,13 @@ Round 36's four open items are all closed and mutation-proved. There is no backl
 clear before round 37 — which is unusual for this campaign, and means the round starts
 clean rather than against a fix pass.
 
-### Deliberately left unbuilt — do not report as a defect
+### Dormant by design — do not report as a defect
 
-**`CW-8` (knowledge freshness) is specified and unbuilt**, and belongs upstream in
-`McGill-Core` because `knowledge.py` is vendored. See `COWORKER_ALIGNMENT.md`. Its
-absence is not a defect. CW-1..CW-7 shipped across v0.16.0–v0.19.0.
+**CW-8's freshness contract ships but never fires.** The kit's default knowledge
+source is `NullKnowledge`, which performs no lookups, so no real run carries a
+`freshness` at all until FOLLOW-UP-1 wires the graph. The kit's checks exercise the
+vendored module directly for that reason. All eight CW features shipped across
+v0.16.0–v0.20.0.
 
 **One guard is documented as defence-in-depth, not as covered.**
 `render_review.py`'s CaseState reconciliation cannot be isolated by a test — the reply

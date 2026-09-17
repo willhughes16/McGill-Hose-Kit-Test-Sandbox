@@ -1243,6 +1243,56 @@ check("no field is marked OPERATOR-STATED or SOURCE UNCLEAR",
 check("and the heading still says the EMAIL said it", "WHAT THE EMAIL SAID" in plain)
 shutil.rmtree(d)
 
+print("CW-8 — the vendored engine states how old a fact is, and defaults to unknown")
+# The kit ships this contract DORMANT: its default source is NullKnowledge, which
+# performs no lookups, so no run here produces a `freshness` at all (FOLLOW-UP-1).
+# These assert the contract the kit SHIPS, against the vendored module directly —
+# the alternative is shipping a promise nothing checks until the graph is wired.
+sys.path.insert(0, os.path.join(ROOT, "src", "vendor"))
+from email_to_bom.knowledge import (  # noqa: E402
+    FixtureKnowledge, NullKnowledge)
+
+_dated = {"revision": "2026-08-21T06:00Z",
+          "components": [{"id": "A", "description": "water hose", "tier": "verified",
+                          "as_of": "2026-08-20"},
+                         {"id": "B", "description": "water hose", "tier": "verified"}]}
+_unpinned = {"components": [{"id": "B", "description": "water hose",
+                             "tier": "verified"}]}
+
+
+def _fresh(data, component, op="resolve_component"):
+    """The freshness of one lookup, or "" when the key is absent.
+
+    Returns rather than raises, the same way `case_and_draft_agree` does: a
+    removed defence must surface as a clean FAIL. A KeyError here would abort the
+    whole script and take every later check with it — which is how a mutation run
+    came back reporting this defence as UNCOVERED when the suite had in fact
+    crashed on it.
+    """
+    k = FixtureKnowledge(data)
+    getattr(k, "find_candidates" if op == "find_candidates" else
+            "resolve_component")({"media": "water"} if op == "find_candidates"
+                                 else component)
+    entry = next((e for e in k.log() if e["op"] == op), {})
+    return entry.get("freshness", "")
+
+
+check("a dated fact reports its OWN age", _fresh(_dated, "A") == "as_of:2026-08-20",
+      f"got {_fresh(_dated, 'A')!r}")
+check("an undated fact falls back to the snapshot revision, never to 'now'",
+      _fresh(_dated, "B") == "revision:2026-08-21T06:00Z")
+check("an unpinned source with an undated fact reports unknown",
+      _fresh(_unpinned, "B") == "unknown",
+      "default-deny: a fact whose age nobody stated is not fresh")
+check("a MISS still reports the source's age", _fresh(_dated, "NOPE").startswith("revision:"))
+check("a mixed batch does not claim the newest age",
+      _fresh(_dated, None, op="find_candidates") == "revision:2026-08-21T06:00Z",
+      "reporting the newest would make a batch look fresher than its oldest member")
+_n = NullKnowledge()
+_n.resolve_component("A")
+check("the kit's OWN default still logs nothing", _n.log() == [],
+      "the contract ships dormant — this is what every real run does")
+
 print("CW-7 — a correction is only usable if it pins to a real run")
 d = workdir(("rfq.eml", "plain-steam"))
 prepare(d, "rfq.eml")

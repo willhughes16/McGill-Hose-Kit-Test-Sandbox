@@ -777,8 +777,37 @@ features are now in:
   natural, and IS machine-checkable by the kit, which `case_state.schema.json` is not
   (FOLLOW-UP-10). Worth knowing before a fourth schema is written.
 
-Suites at closure: completeness 184/0, selftest **218/218**, parity 7/7, golden 2/2,
-manifest valid. Mutation runs across CW-1..CW-7: **41 attempted, 40 caught**, and the
+- REQ-104 **Every knowledge lookup states how old the fact is (CW-8, v0.20.0).** The
+  last of the eight, and the only one that could not be built in the kit:
+  `knowledge.py` is vendored, and editing `src/vendor/` to change behaviour is the one
+  thing this project never does. So it was built UPSTREAM in `ScaleUpLabs/McGill-Core`
+  (`6b0a897`, 10 new tests, 529 -> 539) and re-vendored.
+  Each lookup now carries `freshness`: `as_of:<v>` when the source stated when the
+  fact was true, `revision:<v>` when only the snapshot is pinned, and `unknown`
+  otherwise — **default-deny, exactly as the tier is**. A fact whose age nobody stated
+  is not fresh; it is unknown. `find_candidates` claims an age only when every returned
+  fact agrees on one, because reporting the newest would make a batch look fresher than
+  its oldest member, which is how a stale rating reaches a proposal.
+  **Deliberately no wall clock.** Recording when we asked would make the engine's
+  output non-deterministic and break byte parity for every consumer that pins it, and
+  it answers a different question than how old the fact is. An upstream test asserts
+  two runs of one snapshot produce identical lookups.
+  **The kit's parity stayed 7/7 byte-identical through the re-vendor**, which is the
+  proof that this kit's output is unaffected: the shipped default is `NullKnowledge`,
+  which performs no lookups, so the contract ships DORMANT (FOLLOW-UP-1). The kit's
+  checks therefore exercise the vendored module directly — the alternative is shipping
+  a promise nothing verifies until the graph is wired.
+  **Mutation-proved,** both upstream (5, all caught) and kit-side (4, all caught).
+- **A mutation run reported a defence as uncovered when the suite had CRASHED on it.**
+  The kit-side freshness checks read `entry["freshness"]`, so deleting the key raised
+  KeyError, aborted `selftest.py` and took every later check with it — and the harness,
+  which counts FAIL lines, saw none. Now `.get(...)`, returning "" the way
+  `case_and_draft_agree` returns False. Worth remembering when reading any mutation
+  result: no FAIL lines can mean the check is vacuous OR that the suite never got
+  there.
+
+Suites at closure: completeness 184/0, selftest **224/224**, parity 7/7, golden 2/2,
+manifest valid. Mutation runs across CW-1..CW-8: **50 attempted, 49 caught**, and the
 one survivor (M19) is the defence-in-depth guard above, proven non-observable and
 documented as such rather than papered over with a check that passes for the wrong
 reason. Two of the campaign's own checks were caught by these runs and rewritten: a

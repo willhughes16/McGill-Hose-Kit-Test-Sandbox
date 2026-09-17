@@ -45,6 +45,10 @@ class ComponentFact:
     tier: str = CANDIDATE
     citation: str = ""
     ratings: dict[str, Any] | None = None
+    # When the SOURCE last verified this fact, in the source's own words. Empty
+    # means the source did not say -- which is not the same as "now", and is never
+    # treated as such. See `_Logged._freshness`.
+    as_of: str = ""
 
     @property
     def groundable(self) -> bool:
@@ -70,6 +74,7 @@ def _clean(record: Any) -> ComponentFact | None:
         tier=VERIFIED if tier == VERIFIED else CANDIDATE,
         citation=str(record.get("citation") or ""),
         ratings=ratings if isinstance(ratings, dict) else None,
+        as_of=str(record.get("as_of") or "")[:64],
     )
 
 
@@ -90,8 +95,36 @@ class _Logged:
         self._log: list[dict[str, Any]] = []
         self.revision: str | None = None
 
-    def _record(self, op: str, arg: Any, outcome: str, **extra: Any) -> None:
-        entry = {"op": op, "arg": str(arg)[:80], "outcome": outcome}
+    def _freshness(self, as_of: str = "") -> str:
+        """How old the fact behind a lookup is, in the source's own terms.
+
+        Three forms, and the order is the point:
+
+          ``as_of:<value>``    the source stated when the fact was true. The only
+                               form that says anything about THIS fact.
+          ``revision:<value>`` no per-fact statement, but the source is pinned, so
+                               the fact is at most as fresh as the snapshot.
+          ``unknown``          nothing was said. DEFAULT-DENY, exactly as the tier
+                               is: a fact whose age nobody stated is not fresh, it
+                               is unknown, and a consumer that needs freshness must
+                               treat it as stale.
+
+        Deliberately NO wall clock. Recording "we asked at 14:02" would make the
+        engine's output non-deterministic and break byte parity for every consumer
+        that pins it, and it answers a different question anyway -- when we asked,
+        not how old the answer is. The run's own timestamp already exists outside
+        the engine; the age of the FACT can only come from the source.
+        """
+        if as_of:
+            return f"as_of:{as_of}"
+        if self.revision:
+            return f"revision:{self.revision}"
+        return "unknown"
+
+    def _record(self, op: str, arg: Any, outcome: str, as_of: str = "",
+                **extra: Any) -> None:
+        entry = {"op": op, "arg": str(arg)[:80], "outcome": outcome,
+                 "freshness": self._freshness(as_of)}
         entry.update(extra)
         self._log.append(entry)
 
@@ -147,6 +180,7 @@ class FixtureKnowledge(_Logged):
             fact = _clean(rec)
             if fact and fact.id.upper() == key:
                 self._record("resolve_component", component_id, "hit",
+                             as_of=fact.as_of,
                              tier=fact.tier, citation=fact.citation)
                 return fact
         self._record("resolve_component", component_id, "miss")
@@ -162,7 +196,13 @@ class FixtureKnowledge(_Logged):
             hay = f"{fact.id} {fact.description}".lower()
             if not media or media in hay:
                 out.append(fact)
+        # An as_of is claimed only when EVERY returned fact agrees on one.
+        # A mixed result has no single age, and picking the newest would report
+        # the batch as fresher than its oldest member -- the direction that gets a
+        # stale rating onto a proposal. Disagreement falls back to the revision.
+        ages = {f.as_of for f in out}
         self._record("find_candidates", spec, "hit" if out else "miss",
+                     as_of=ages.pop() if len(ages) == 1 else "",
                      count=len(out))
         return out[:5]
 
@@ -175,6 +215,7 @@ class FixtureKnowledge(_Logged):
         for rec in self.data.get("customers", []):
             if isinstance(rec, dict) and str(rec.get("name", "")).lower() == key:
                 self._record("customer_context", name, "hit",
+                             as_of=str(rec.get("as_of") or "")[:64],
                              citation=str(rec.get("citation") or ""))
                 return rec
         self._record("customer_context", name, "miss")
@@ -290,8 +331,13 @@ class McpKnowledge(_Logged):
             description=str(row.get("description") or "")[:200],
             component_type=str(types[0]).title() if isinstance(types, list) and types else "",
             tier=CANDIDATE,          # graph facts are never verified (see docstring)
-            citation=f"twyd:entity/{row.get('name')}")
+            citation=f"twyd:entity/{row.get('name')}",
+            # The graph states this when it has it. A live fetch does NOT make a
+            # fact current: the graph may be serving something ingested a year
+            # ago, and "we asked just now" is not an answer to "how old is this".
+            as_of=str(row.get("as_of") or "")[:64])
         self._record("resolve_component", component_id, "hit",
+                     as_of=fact.as_of,
                      tier=fact.tier, citation=fact.citation, ms=ms)
         return fact
 
@@ -321,7 +367,9 @@ class McpKnowledge(_Logged):
                "summary_text": str(row.get("description"))[:300],
                "tier": CANDIDATE,
                "citation": f"twyd:entity/{row.get('name')}"}
-        self._record("customer_context", name, "hit", citation=ctx["citation"])
+        self._record("customer_context", name, "hit",
+                     as_of=str(row.get("as_of") or "")[:64],
+                     citation=ctx["citation"])
         return ctx
 
 
