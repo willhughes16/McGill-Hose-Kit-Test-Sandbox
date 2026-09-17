@@ -16,12 +16,19 @@ __pycache__/
 # astro-code: harness-created agent worktrees — never commit these
 .claude/worktrees/
 
-# parity fixture byproducts — regenerated on every run
-tools/parity/fixtures/*/actual_*
-tools/parity/fixtures/*/state.json
-tools/parity/fixtures/*/case_state.json
+# Fixture byproducts, ignored by INVERSION rather than by name. The previous
+# version listed each byproduct (actual_*, state.json, case_state.json, reply.md,
+# _report/), and adding _report/run_manifest.json in v0.16.0 walked straight past
+# it: six run manifests appeared as untracked files ready to be committed into
+# the fixture directories. Naming the byproducts is the wrong side to enumerate —
+# a fixture directory holds INPUTS and EXPECTATIONS, everything else in it is
+# regenerated. So everything is ignored and the inputs are allowed back by name:
+# a new artifact is ignored for free, and a genuinely new tracked input has to be
+# added with `git add -f`, which is loud.
+tools/parity/fixtures/*/*
+!tools/parity/fixtures/*/input.eml
+!tools/parity/fixtures/*/expected_output.json
 
-# golden-suite byproducts — regenerated on every run
-tools/golden/fixtures/*/actual_*
-tools/golden/fixtures/*/reply.md
-tools/golden/fixtures/*/_report/
+tools/golden/fixtures/*/*
+!tools/golden/fixtures/*/expected_output.json
+!tools/golden/fixtures/*/case_state.json

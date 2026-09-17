@@ -71,6 +71,13 @@ phases:
       verbatim. Read the summary it prints, then STOP and read
       `_report/case_state.json` before saying anything about the request.
 
+      It also writes `_report/run_manifest.json` — the run record: the kit
+      version and engine commit that produced this case, the input's sha256 and
+      an `idempotency_key` derived from it, the `outcome`, and
+      `evidence_not_read`. If the run warns that the customer sent files the
+      engine does not read, say so when you report: every open item below was
+      derived WITHOUT them.
+
       Interpreting the result:
         - `engine_exit` is 2 for essentially every real RFQ. That is the NORMAL,
           by-design outcome and means "a draft was produced and it has open
@@ -86,6 +93,9 @@ phases:
           assumed.
         - `request_class` decides which fields even apply. A component or order
           request must NOT be pushed through hose-assembly questions.
+        - `outcome` in the run manifest is `needs_human_input` when anything
+          blocks a quote and `complete` otherwise. `complete` does NOT mean
+          sendable — every case here is a draft a human reviews.
 
       Do NOT answer, resolve, or guess at any open item. Do NOT add, remove or
       reword them. Your job is to report them faithfully.
@@ -96,6 +106,7 @@ phases:
       - "NEVER answer, drop, reword or re-prioritize an open item"
       - "NEVER invent a part number, price, lead time or stock position"
       - "A field with status `reading` or `assumed` is unconfirmed — say so explicitly"
+      - "NEVER open or read an attachment — the engine reads none of them; name them and stop"
       - "Record intermediate results in _report/ so the run is resumable"
       - "Update state.json when the phase completes"
     input:
@@ -103,6 +114,7 @@ phases:
     output:
       - _report/state.json
       - _report/case_state.json
+      - _report/run_manifest.json
 
   # ─────────────────────────────────────────────────────────────────────
   # PHASE 2 — Generate deliverable
@@ -155,6 +167,7 @@ phases:
       - "Report every open item — do NOT summarise them away or judge them minor"
       - "Send _report/reply.md as the message body — the kit attaches NOTHING"
       - "NEVER attach case_state.json or any other file to the reply"
+      - "If the reply carries an EVIDENCE NOT READ block, repeat it when you report — the open items were derived without those files"
     input:
       - _report/state.json
       - _report/case_state.json

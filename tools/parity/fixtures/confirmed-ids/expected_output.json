@@ -3,7 +3,7 @@
   "extraction": {
     "customer": "Northside Aggregate",
     "media": "suction",
-    "size": null,
+    "size": "4 ID",
     "quantity": 1,
     "end_fittings": [
       "SHANK",
@@ -12,7 +12,7 @@
     ],
     "material": null,
     "material_recognized": false,
-    "length_value": "4",
+    "length_value": null,
     "length_type": null,
     "pressure": {
       "kind": "vacuum",
@@ -52,8 +52,8 @@
       "status": "captured"
     },
     "size": {
-      "value": null,
-      "status": "missing"
+      "value": "4 ID",
+      "status": "captured"
     },
     "quantity": {
       "value": 1,
@@ -64,9 +64,8 @@
       "status": "missing"
     },
     "length": {
-      "value": "4",
-      "status": "reading",
-      "type": null
+      "value": null,
+      "status": "missing"
     },
     "pressure": {
       "kind": "vacuum",
@@ -111,15 +110,9 @@
       "field": "temperature"
     },
     {
-      "code": "SIZE_MISSING",
+      "code": "LENGTH_MISSING",
       "priority": "confirm",
-      "ask": "Hose size (inside diameter) not stated \u2014 confirm the ID.",
-      "field": "size"
-    },
-    {
-      "code": "LENGTH_TYPE_MISSING",
-      "priority": "confirm",
-      "ask": "Length given without a length type. Confirm convention: overall length (OAL) / seat-to-seat / center-to-end / cut length / live length.",
+      "ask": "No length detected in the RFQ. Confirm the required assembly length and convention (overall length (OAL) / seat-to-seat / center-to-end / cut length / live length) before fabrication (WI-020).",
       "field": "length"
     }
   ],
@@ -204,11 +197,7 @@
       "rule_id": "R-TEMPERATURE"
     },
     {
-      "text": "Hose size (inside diameter) not stated \u2014 confirm the ID.",
-      "rule_id": "R-EXTRACT"
-    },
-    {
-      "text": "Length given without a length type. Confirm convention: overall length (OAL) / seat-to-seat / center-to-end / cut length / live length.",
+      "text": "No length detected in the RFQ. Confirm the required assembly length and convention (overall length (OAL) / seat-to-seat / center-to-end / cut length / live length) before fabrication (WI-020).",
       "rule_id": "R-LENGTH"
     }
   ],

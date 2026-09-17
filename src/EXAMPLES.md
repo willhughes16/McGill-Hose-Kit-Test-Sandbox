@@ -29,19 +29,21 @@ python3 scripts/render_reply.py --out _report/reply.md --state _report/state.jso
 
 **Expected workflow:**
 1. `prepare` — resolves `rfq.eml`, writes `_report/state.json`.
-2. `extract_case` — `scripts/run_engine.py` writes `_report/case_state.json`.
-   The engine exits 2 (a draft with open items — the normal outcome).
+2. `extract_case` — `scripts/run_engine.py` writes `_report/case_state.json`
+   and `_report/run_manifest.json`. The engine exits 2 (a draft with open items
+   — the normal outcome); the manifest states that in words as
+   `outcome: needs_human_input` or `complete`.
 3. `generate_report` — `generate_report.py` writes `_report/bom_draft.md`, then
    the request is summarised: what was understood, what must be answered, where
    to route it.
 
-**Produces:** `_report/reply.md` (what you send), `_report/case_state.json`, `_report/bom_draft.md`
+**Produces:** `_report/reply.md` (what you send), `_report/case_state.json`, `_report/bom_draft.md`, `_report/run_manifest.json`
 
 For the shipped sample (a 4in EPDM suction hose assembly, couplers named but no
-size/temperature stated) the engine classifies it `hose_assembly`, drafts no BOM
-lines because no selection rule is grounded, raises 2 harness-held checkpoints
-and 6 open items — `MATERIAL_CONFIRM`, `VACUUM_VALUE_CONFIRM`,
-`TEMPERATURE_MISSING`, `SIZE_MISSING`, `LENGTH_TYPE_MISSING`,
+length or temperature stated) the engine classifies it `hose_assembly`, captures
+the size as `4 ID`, drafts no BOM lines because no selection rule is grounded,
+raises 2 harness-held checkpoints and 5 open items — `MATERIAL_CONFIRM`,
+`VACUUM_VALUE_CONFIRM`, `TEMPERATURE_MISSING`, `LENGTH_MISSING`,
 `SELECTION_UNRESOLVED`.
 
 ### 2. Draft with Component IDs an operator already confirmed
@@ -128,6 +130,19 @@ order.
   drops `fields`, `routing`, `knowledge` and `supersedes`, and keeps only the code
   and ask from each open item. Anything programmatic must read the JSON — which is why
   the reply states it in words instead of attaching JSON.
+- **The outcome is in the manifest, not in the exit code.**
+  `_report/run_manifest.json` carries `outcome: needs_human_input` when anything
+  blocks a quote and `complete` otherwise, plus the kit version, the engine
+  commit, the input's sha256 and an `idempotency_key` for recognising a retry.
+  `complete` does not mean sendable — every case here is a draft a human reviews.
+  A run that FAILED writes no manifest at all: absence is the failure signal.
+- **Attachments are named, never read.** The engine reads the message text only,
+  so a drawing or spec sheet the customer attached is not in the case. The reply
+  carries an `EVIDENCE NOT READ` block naming the files, and the manifest carries
+  the same list under `evidence_not_read`. Every reply states the attachment
+  position — including "none" — so silence never has to be interpreted. Do not
+  open the files and answer from them: the open items were all derived without
+  them, and reading one puts case data into the answer from outside the engine.
 - **`reading` ≠ captured.** A field with status `reading` means the engine saw a
   value but refuses to commit to it (ambiguous units like bare `bar`, or a bare
   `F`/`C`). It must be confirmed, never assumed. Same for `assumed`.
