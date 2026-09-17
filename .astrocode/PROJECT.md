@@ -835,6 +835,20 @@ most likely to fail a verification round and should get one of its own.
 - The kit drafts only. It must never present output as a quote, a confirmed BOM or
   an order, and must never answer, drop, reword or re-prioritize an open item.
 
+### Published state — read the record, do not trust a carried-forward claim
+
+**v0.20.0 is live** (2026-09-17T22:54Z, sha `852edc2f67a008cd`), published on the
+operator's instruction without round 37. The instance holds four versions: 0.20.0,
+0.14.0 (2026-08-27), 0.3.0 and 0.2.0.
+
+That read-back corrected a claim this document and `CAMPAIGN_RUNBOOK.md` had both
+been repeating all day: **the instance was never serving v0.3.0**. v0.14.0 had been
+the latest since 2026-08-27. The line had been carried forward from the v0.6.0
+rollback and nobody re-read the record for three weeks — the same failure shape as
+a check that cannot fail, applied to a fact instead of a test. `GET
+/api/kit-packages/mcgill-email-to-bom` requires a bearer token, which is why it was
+easy not to look; authenticate from the environment the way the publisher does.
+
 ## Out of scope / deferred follow-ups
 
 These are **flagged, not done** — capabilities the source has that this kit

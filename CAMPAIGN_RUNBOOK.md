@@ -241,14 +241,30 @@ new engine rather than the new checks. Say which when you report it.
 
 ## PUBLISHING
 
-The instance serves **v0.3.0**. `main` is at **v0.16.0**. The gap is thirteen versions:
-no wrapper defences, no inline reply, no attachment honesty, no run manifest, none of
-twelve rounds of fixes, and the OLD engine — the one that reads a phone number as a
-hose length on real McGill mail. That is the standing cost of not shipping.
+**v0.20.0 was published on 2026-09-17T22:54Z** and the record was read back:
+`latest: 0.20.0`, sha `852edc2f67a008cd`. The operator published deliberately WITHOUT
+round 37 — see the warning below, which still stands.
 
-**The gate before publishing is round 37**, for the reason at the top of this file: no
-round has tested `ae4411f`. The re-vendor is a materially better engine on real mail,
-which is an argument for shipping it, not for skipping the check.
+The read-back also corrected a claim this file and PROJECT.md had both been making.
+The instance did **not** serve v0.3.0: its record shows four versions, and **v0.14.0
+was uploaded 2026-08-27T03:03Z**. The "instance serves v0.3.0" line had been carried
+forward from the rollback of v0.6.0 and was stale for three weeks. Read the record
+before repeating a version claim, including one from this file.
+
+    0.20.0  852edc2f67a008cd  2026-09-17T22:54Z
+    0.14.0  d1ee073a42f7522f  2026-08-27T03:03Z
+    0.3.0   76c920a1a0c0b934  2026-08-26T16:58Z
+    0.2.0   6cdfd8364c509f99  2026-08-26T16:02Z
+
+**Round 37 is still outstanding, and v0.20.0 is live without it.** No blind round has
+tested the engine this kit ships (`ae4411f` behaviour) or any of the five scripts added
+on 2026-09-17: `attachments.py`, `answers.py`, `apply_answers.py`, `routing.py`,
+`render_review.py`. If the round finds something whose consequence reaches a customer,
+the rollback below is the response, and it has worked twice.
+
+Note the published package is the publisher's own build: all 29 `src/` files PLUS
+`kit.json` (30 files, sha `852edc2f`). That sha deliberately differs from
+`dist/kit.zip`'s — different contents, not a mismatch.
 
 ```bash
 cd ~/Desktop/McGill/mcgill-email-to-bom && source ~/.zshrc && \
