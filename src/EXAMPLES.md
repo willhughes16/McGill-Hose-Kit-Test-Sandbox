@@ -131,9 +131,11 @@ order.
   and ask from each open item. Anything programmatic must read the JSON — which is why
   the reply states it in words instead of attaching JSON.
 - **The outcome is in the manifest, not in the exit code.**
-  `_report/run_manifest.json` carries `outcome: needs_human_input` when anything
-  blocks a quote and `complete` otherwise, plus the kit version, the engine
-  commit, the input's sha256 and an `idempotency_key` for recognising a retry.
+  `_report/run_manifest.json` carries `outcome: needs_human_input` when a blocking
+  open item exists **or the customer attached a file the engine never read**, and
+  `complete` otherwise — plus the kit version, the engine commit, the input's
+  sha256 and an `idempotency_key` for recognising a retry. `outcome_reason` says
+  which, and names the files.
   `complete` does not mean sendable — every case here is a draft a human reviews.
   A run that FAILED writes no manifest at all: absence is the failure signal.
 - **Attachments are named, never read.** The engine reads the message text only,

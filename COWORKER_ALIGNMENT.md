@@ -111,11 +111,15 @@ project's own stopping rule — *no finding would give a customer a wrong answer
 this qualifies: the reviewer is shown a complete-looking case that omits the
 document the customer considered the answer.
 
-*Kit side.* `run_engine.py` inspects the `.eml` for parts carrying a filename or
-a non-inline disposition, records `{filename, content_type, bytes}` in
-`state.json`, and `render_reply.py` renders an **EVIDENCE NOT READ** block naming
-each one. It never guesses at content and never adds an open item — the engine
-owns `open_items[]`.
+*Kit side, as built.* `scripts/attachments.py` inspects the `.eml` for parts
+carrying a filename or an `attachment` disposition and records
+`{filename, content_type, disposition, bytes}` under `evidence_not_read` in
+**`run_manifest.json`** (not `state.json`, as this section originally proposed —
+the manifest is the run record, and putting it there means Body can route on it
+without parsing prose). `render_reply.py` derives the same list independently and
+renders an **EVIDENCE NOT READ** block naming each file. It never guesses at
+content and never adds an open item — the engine owns `open_items[]`. Since
+v0.17.0 an unread attachment also forces `outcome: needs_human_input` (REQ-097).
 
 *Upstream.* The correct long-term home is an `ATTACHMENT_NOT_READ` open item in
 `ScaleUpLabs/McGill-Core`, exactly alongside `HTML_SOURCE_REVIEW` and
@@ -143,7 +147,7 @@ the invocation record, engine exit code, wall time, and UTC timestamps.
 idempotency key: Body can recognise a retry of the same case without inventing
 one, which is exactly the duplicate-suppression the contract section asks for.
 
-### CW-3 — Explicit outcome, not an exit code — **SHIPPED v0.16.0**
+### CW-3 — Explicit outcome, not an exit code — **SHIPPED v0.16.0, extended v0.17.0**
 
 *Problem.* "Compute can report progress, request human input, propose a result,
 complete or fail." The kit's boundary says 0 or 1, and the engine's `2` means
@@ -151,11 +155,21 @@ complete or fail." The kit's boundary says 0 or 1, and the engine's `2` means
 bullet warning people not to read as failure. "Needs human input" is currently
 implicit, buried inside the JSON.
 
-*Design.* The manifest carries `outcome ∈ {complete, needs_human_input, failed}`,
-**derived** from the CaseState — any `blocking` open item means
-`needs_human_input` — never asserted independently. Derived, because an
-independently-set flag is a second copy that can drift, which is failure shape #1
-of this campaign.
+*Design.* The manifest carries `outcome ∈ {complete, needs_human_input}`,
+**derived** from what the run produced, never asserted independently. Derived,
+because an independently-set flag is a second copy that can drift, which is
+failure shape #1 of this campaign. `failed` is deliberately NOT in the
+vocabulary: a failed run writes no manifest and the wrapper exits 1, so absence
+is the failure signal and cannot be faked by a half-written record.
+
+Two grounds force `needs_human_input`: a `blocking` open item, and **an
+attachment the engine never read** (v0.17.0, REQ-097). The second was the
+question v0.16.0 left open and the operator closed on 2026-09-17: an RFQ saying
+"dimensions are on the attached drawing" was reporting `complete`, because the
+engine's asks were all `confirm` and the drawing was invisible to it. The engine
+cannot raise an item about a file it cannot see, so the outcome carries it. An
+inline signature image does not force it — routing every footer logo to a human
+is how a signal becomes noise.
 
 ### CW-4 — Split the audiences: `review_request.md` and `reply.md`
 
@@ -249,10 +263,11 @@ FOLLOW-UP-1 wires the live graph, the document's promise is unmet. Raise against
 
 ## 6. Suggested order
 
-**Status 2026-09-17: CW-1, CW-2 and CW-3 are shipped in v0.16.0** (REQ-092..REQ-096),
-each mutation-proved — 10 mutations, 10 caught. Adding the manifest to the
-invalidation loop also surfaced REQ-096, a real stale-CaseState defect on the
-redirected-`--out` path. CW-4 onwards are unbuilt.
+**Status 2026-09-17: CW-1, CW-2 and CW-3 are shipped** — v0.16.0 (REQ-092..REQ-096)
+and v0.17.0 (REQ-097, the unread-attachment outcome), each mutation-proved: 16
+mutations, 16 caught, 0 survivors. Adding the manifest to the invalidation loop
+also surfaced REQ-096, a real stale-CaseState defect on the redirected-`--out`
+path. CW-4 onwards are unbuilt.
 
 
 1. **CW-1** — it is an honesty gap in shipped behaviour, and it is small.

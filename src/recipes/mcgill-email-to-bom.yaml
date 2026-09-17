@@ -93,9 +93,10 @@ phases:
           assumed.
         - `request_class` decides which fields even apply. A component or order
           request must NOT be pushed through hose-assembly questions.
-        - `outcome` in the run manifest is `needs_human_input` when anything
-          blocks a quote and `complete` otherwise. `complete` does NOT mean
-          sendable — every case here is a draft a human reviews.
+        - `outcome` in the run manifest is `needs_human_input` when a blocking
+          open item exists OR the customer attached a file the engine never read,
+          and `complete` otherwise; `outcome_reason` says which. `complete` does
+          NOT mean sendable — every case here is a draft a human reviews.
 
       Do NOT answer, resolve, or guess at any open item. Do NOT add, remove or
       reword them. Your job is to report them faithfully.

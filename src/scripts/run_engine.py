@@ -136,13 +136,16 @@ def build_manifest(case, invocation, paths, engine_exit, started, elapsed_ms):
     """
     commit, commit_error = engine_commit()
     input_sha = sha256_of(invocation["input"])
-    outcome, outcome_reason = derive_outcome(case)
+    evidence = attachments.scan(invocation["input"])
+    # The outcome reads BOTH grounds: the engine's blocking items and the files
+    # the engine could not see (REQ-097). The engine cannot raise an item about
+    # an attachment it never opened, so the outcome has to carry it.
+    outcome, outcome_reason = derive_outcome(case, evidence)
     ident = json.dumps({"input_sha256": input_sha,
                         "component_ids": invocation.get("component_ids") or [],
                         "coc": bool(invocation.get("coc")),
                         "config_dir": invocation.get("config_dir")},
                        sort_keys=True)
-    evidence = attachments.scan(invocation["input"])
     try:
         size = os.path.getsize(invocation["input"])
     except OSError:

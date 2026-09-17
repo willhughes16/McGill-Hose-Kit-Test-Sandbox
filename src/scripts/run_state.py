@@ -55,16 +55,17 @@ INVOCATION_KEYS = ("input", "component_ids", "coc", "config_dir")
 # copy can be: `tools/selftest.py` asserts it equals `kit.json`, so a version
 # bump that forgets this line fails the suite instead of mis-attributing a case.
 KIT_NAME = "mcgill-email-to-bom"
-KIT_VERSION = "0.16.0"
+KIT_VERSION = "0.17.0"
 
 # The outcome vocabulary at the Body/Compute boundary (CW-3).
 #
 # `engine_exit` cannot serve this purpose: 2 means "a draft with open items",
 # the normal result for essentially every real RFQ, and every document in this
 # kit has to spend a bullet warning people not to read it as failure. So the
-# manifest states the outcome in words, DERIVED from the CaseState rather than
-# set alongside it -- an independently-assigned flag is a second copy that can
-# drift, which is failure shape #1 of this campaign.
+# manifest states the outcome in words, DERIVED from what the run produced --
+# the CaseState's open items AND the attachments the engine could not read --
+# rather than set alongside it. An independently-assigned flag is a second copy
+# that can drift, which is failure shape #1 of this campaign.
 #
 # FAILURE IS NOT IN THIS VOCABULARY, on purpose. A failed run writes no
 # manifest at all and the wrapper exits 1, which the clamp in every wrapper
@@ -74,24 +75,62 @@ OUTCOME_COMPLETE = "complete"
 OUTCOME_NEEDS_HUMAN = "needs_human_input"
 
 
-def derive_outcome(case):
-    """(outcome, reason) for a CaseState. Pure, and derived from the items.
+def derive_outcome(case, evidence=None):
+    """(outcome, reason) for a run. Pure, and derived from what the run produced.
 
     `complete` does NOT mean sendable. Every case this kit produces is a draft a
-    human reviews; `complete` means only that nothing in it BLOCKS a quote. The
-    distinction the outcome carries is the one Body needs to route: must a human
-    answer something before this can move, or can it go to review as it stands.
+    human reviews; `complete` means only that nothing in it requires an answer
+    before the case can move. The distinction is the one Body needs to route.
+
+    TWO grounds for `needs_human_input`, and the second was added deliberately
+    after the first shipped (REQ-097, operator's decision 2026-09-17):
+
+    1. **A blocking open item.** The engine's own judgement.
+    2. **An attachment the engine never read.** v0.16.0 derived the outcome from
+       `open_items[]` alone, which meant an RFQ saying "dimensions are on the
+       attached drawing" could report `complete`: the engine's asks were all
+       `confirm`, and the drawing was invisible to it. A reviewer routing on
+       `complete` would skim a case whose actual specification was never opened.
+       The engine cannot raise an item about a file it cannot see, so the outcome
+       has to carry it.
+
+    Note what does NOT force it: an inline part with a Content-ID -- a signature
+    logo. Routing every footer image to a human is how a signal becomes noise,
+    and then the drawing goes unnoticed too. See `attachments._classify`.
+
+    A scan that did not complete also yields `needs_human_input`. "We could not
+    tell whether the customer attached anything" is not the same as "they did
+    not", and only one of those is safe to route as `complete`.
+
+    Still DERIVED, not asserted: both grounds are read from what the run
+    produced, never set alongside it. An independently-assigned outcome is a
+    second copy that can drift, which is failure shape #1 of this campaign.
     """
     items = (case or {}).get("open_items") or []
     blocking = [i for i in items if (i or {}).get("priority") == "blocking"]
+    unread = (evidence or {}).get("attachments") or []
+    status = (evidence or {}).get("status")
+
+    reasons = []
     if blocking:
         codes = sorted({str(i.get("code")) for i in blocking})
-        return OUTCOME_NEEDS_HUMAN, (
-            f"{len(blocking)} blocking open item(s): {', '.join(codes)}")
+        reasons.append(f"{len(blocking)} blocking open item(s): {', '.join(codes)}")
+    if unread:
+        names = ", ".join(str(f.get("filename")) for f in unread)
+        reasons.append(
+            f"{len(unread)} attached file(s) the engine never read ({names}); "
+            "the case was derived without them")
+    if evidence is not None and status != "scanned":
+        reasons.append(
+            "the attachments could not be checked "
+            f"({(evidence or {}).get('error') or status}), so it is unknown "
+            "whether the customer sent evidence this case does not contain")
+    if reasons:
+        return OUTCOME_NEEDS_HUMAN, "; ".join(reasons)
     if items:
         return OUTCOME_COMPLETE, (
-            f"{len(items)} open item(s), none blocking a quote")
-    return OUTCOME_COMPLETE, "no open items"
+            f"{len(items)} open item(s), none blocking a quote; no unread attachments")
+    return OUTCOME_COMPLETE, "no open items; no unread attachments"
 
 
 def engine_commit():

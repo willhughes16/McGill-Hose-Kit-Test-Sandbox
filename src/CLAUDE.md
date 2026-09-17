@@ -93,9 +93,12 @@ line:
   into the answer from outside the engine, with none of its guarantees, and every
   open item below it was derived without that file. Tell the operator to open it.
 - **Never read `outcome: complete` as "ready to send".** It means only that
-  nothing BLOCKS a quote. Every case this kit produces is a draft a human
-  reviews; `complete` versus `needs_human_input` is a routing distinction, not an
-  approval.
+  nothing in the case requires an answer before it can move. Every case this kit
+  produces is a draft a human reviews; `complete` versus `needs_human_input` is a
+  routing distinction, not an approval. Two things force `needs_human_input`: a
+  blocking open item, and **an attachment the engine never read** — the engine
+  cannot raise an item about a file it cannot see, so the outcome carries it. An
+  inline signature image does not.
 - **Never treat a missing artifact as equivalent to a stale one.** The scripts delete
   a previous run's artifacts before doing anything that can fail, on purpose: no
   artifact is an honest error, a leftover one is a silent wrong answer.

@@ -1091,6 +1091,70 @@ for label, body, expect in (
           (mf.get("outcome") == "needs_human_input") == bool(blocking))
     shutil.rmtree(d)
 
+print("REQ-097 — an unread attachment forces needs_human_input on its own")
+# v0.16.0 derived the outcome from open_items[] alone, so an RFQ saying
+# "dimensions are on the attached drawing" reported `complete`: the engine's asks
+# were all `confirm` and the drawing was invisible to it. A reviewer routing on
+# `complete` would skim a case whose actual specification was never opened. The
+# engine cannot raise an item about a file it cannot see, so the outcome carries
+# it. Operator's decision, 2026-09-17.
+d = tempfile.mkdtemp()
+os.makedirs(os.path.join(d, "_report"), exist_ok=True)
+attach_eml(d, "rfq.eml",
+           "Need 4 hoses, dimensions and fittings are on the attached drawing. "
+           "Steam service, 316 SS, 150 psi.",
+           [("rev-C.pdf", "application", "pdf", b"%PDF-1.4 x")], [])
+prepare(d, "rfq.eml")
+phase1(d, "rfq.eml")
+case = read_json(d, "case_state.json")
+mf = read_json(d, "run_manifest.json")
+blocking = [i for i in case.get("open_items", []) if i.get("priority") == "blocking"]
+check("the attachment case carries NO blocking item (so only the file forces it)",
+      not blocking, f"blocking={[i['code'] for i in blocking]}")
+check("an unread attachment alone yields needs_human_input",
+      mf.get("outcome") == "needs_human_input", f"got {mf.get('outcome')!r}")
+check("and the reason names the file, not just a count",
+      "rev-C.pdf" in (mf.get("outcome_reason") or ""),
+      f"reason={mf.get('outcome_reason')!r}")
+shutil.rmtree(d)
+
+print("REQ-097b — an inline signature image does NOT force it")
+# Routing every footer logo to a human is how a signal becomes noise, and then
+# the drawing goes unnoticed too.
+d = tempfile.mkdtemp()
+os.makedirs(os.path.join(d, "_report"), exist_ok=True)
+attach_eml(d, "rfq.eml",
+           "Need 4 hoses, 1/2 ID, 36 inch, 316 SS, steam at 150 psi.",
+           [], [("signature-logo.png", "image", "png", b"\x89PNG")])
+prepare(d, "rfq.eml")
+phase1(d, "rfq.eml")
+mf = read_json(d, "run_manifest.json")
+check("the inline part WAS detected", len((mf.get("evidence_not_read") or {})
+                                          .get("embedded") or []) == 1)
+check("but an inline part alone leaves the outcome complete",
+      mf.get("outcome") == "complete", f"got {mf.get('outcome')!r}")
+shutil.rmtree(d)
+
+print("REQ-097c — a scan that did not complete also forces needs_human_input")
+# Called directly: on the shipped path the scan runs on a file the engine has
+# just read, so this branch needs a race (the input vanishing between the engine
+# pass and the scan) to reach. A check that cannot be executed is worth nothing,
+# and asserting the pure function IS the execution -- the mutation run proves it
+# can fail.
+sys.path.insert(0, os.path.join(ROOT, "src", "scripts"))
+from run_state import derive_outcome  # noqa: E402
+_case = {"open_items": [{"priority": "confirm", "code": "X"}]}
+check("an unreadable scan is not reported as 'no attachments'",
+      derive_outcome(_case, {"status": "unreadable", "attachments": [],
+                             "embedded": [], "error": "boom"})[0]
+      == "needs_human_input")
+check("a clean scan with nothing found stays complete",
+      derive_outcome(_case, {"status": "scanned", "attachments": [],
+                             "embedded": [], "error": None})[0] == "complete")
+check("a blocking item still forces it with no evidence record at all",
+      derive_outcome({"open_items": [{"priority": "blocking", "code": "P"}]},
+                     None)[0] == "needs_human_input")
+
 print("CW-3b — a FAILED run leaves no manifest: absence is the failure signal")
 # `failed` is deliberately absent from the outcome vocabulary. A run that did not
 # produce a CaseState must not leave a record that says anything about one, and

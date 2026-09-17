@@ -19,9 +19,9 @@ both rollbacks worked.
 
 ## STATE AS OF THIS FILE (2026-09-17 — all work is MERGED to `main`)
 
-`main` is at `dc0a05e`, the merge of PR #1. Working tree clean. **`kit.json` and the
-built `dist/kit.zip` are at v0.16.0 and current** — unlike the last two times this file
-was written, the artifact is not stale.
+`main` carries PR #1 (`dc0a05e`), the runbook refresh, and **v0.17.0**. **`kit.json` and
+the built `dist/kit.zip` are at v0.17.0 and current** — unlike the last two times this
+file was written, the artifact is not stale.
 
 What landed since round 36, in order:
 
@@ -46,9 +46,13 @@ What landed since round 36, in order:
   customer's CaseState survived at the conventional `_report/case_state.json`. The
   **eighteenth** missed sibling, on the one key that had been exempted *by name*.
 
-Suites at `dc0a05e`: selftest **160/160**, parity 7/7 (zero normalizations), golden
-2/2, completeness 184 combinations / 0 violations, manifest valid, zip `2945d8ea`.
-Mutation run on the new work: **11 mutations, 11 caught, 0 survivors.**
+- **v0.17.0 — REQ-097**: an unread attachment forces `outcome: needs_human_input` on
+  its own. The operator's decision on the question v0.16.0 left open. An inline
+  signature image does not force it; a scan that did not complete does.
+
+Suites at v0.17.0: selftest **168/168**, parity 7/7 (zero normalizations), golden 2/2,
+completeness 184 combinations / 0 violations, manifest valid.
+Mutation runs on the new work: **16 mutations, 16 caught, 0 survivors.**
 
 ### Nothing is carried forward as an open finding
 
@@ -56,16 +60,16 @@ Round 36's four open items are all closed and mutation-proved. There is no backl
 clear before round 37 — which is unusual for this campaign, and means the round starts
 clean rather than against a fix pass.
 
-### Two things deliberately left undecided — do not "fix" them silently
+### One thing deliberately left unbuilt — do not report it as a defect
 
-1. **An unread attachment does not force `needs_human_input`.** A case whose dimensions
-   are in an unopened drawing can report `outcome: complete`, because the outcome is
-   derived from `open_items[]` alone and none of them blocks. This is correct by
-   REQ-095's definition and arguably still wrong for routing. It is the operator's call,
-   and it is recorded in PR #1. A verifier may legitimately report it as a finding; it
-   is not an oversight.
-2. **`CW-4`…`CW-8` are specified and unbuilt.** See `COWORKER_ALIGNMENT.md`. Their
-   absence is not a defect.
+**`CW-4`…`CW-8` are specified and unbuilt.** See `COWORKER_ALIGNMENT.md`. Their absence
+is not a defect.
+
+(The other item that stood here — whether an unread attachment should force
+`needs_human_input` — was **decided by the operator on 2026-09-17** and is now REQ-097,
+shipped in v0.17.0. Both grounds are derived; an inline signature image does not force
+it. A verifier should attack whether the derivation can be made to disagree with what
+the run actually produced, not whether the rule is right.)
 
 ---
 

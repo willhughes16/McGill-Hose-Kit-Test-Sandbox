@@ -663,8 +663,24 @@ features are now in:
   Body integration using per-case directories. Verified by execution before the fix.
   **Mutation-proved:** restoring the exemption fails the check.
 
-Suites at closure: completeness 184/0, selftest **157/157**, parity 7/7, golden 2/2,
-manifest valid. Mutation run: **10 mutations, 10 caught, 0 survivors.**
+- REQ-097 **An unread attachment forces `needs_human_input` (v0.17.0).** The operator's
+  decision on the question v0.16.0 left open. v0.16.0 derived the outcome from
+  `open_items[]` alone, so an RFQ saying "dimensions are on the attached drawing"
+  reported `complete`: the engine's asks were all `confirm`, and the drawing was
+  invisible to it. A reviewer routing on `complete` would skim a case whose actual
+  specification was never opened. The engine cannot raise an open item about a file it
+  cannot see, so the outcome has to carry it. Still DERIVED — now from two facts the
+  run produced rather than one, never asserted alongside them. An inline part with a
+  Content-ID (a signature logo) does NOT force it: routing every footer image to a
+  human is how a signal becomes noise, and then the drawing goes unnoticed too. A scan
+  that did not complete forces it as well — "we could not tell" is not "they did not".
+  **Mutation-proved:** ignoring unread attachments fails 2 checks, counting inline parts
+  as unread fails 1, treating an unreadable scan as none fails 1, a reason that counts
+  files without naming them fails 1, and not passing the evidence into the derivation
+  fails 2.
+
+Suites at closure: completeness 184/0, selftest **168/168**, parity 7/7, golden 2/2,
+manifest valid. Mutation runs: **16 mutations, 16 caught, 0 survivors.**
 
 The remaining five features (CW-4 review-request artifact, CW-5 resolvable owners,
 CW-6 out-of-band answers, CW-7 correction record, CW-8 knowledge freshness) are
