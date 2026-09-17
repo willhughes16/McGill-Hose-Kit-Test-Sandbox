@@ -34,10 +34,13 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import datetime
+import hashlib
 import io
 import json
 import os
 import sys
+import time
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _VENDOR = os.path.join(os.path.dirname(_HERE), "vendor")
@@ -46,9 +49,11 @@ for _p in (_VENDOR, _HERE):
         sys.path.insert(0, _p)
 
 from email_to_bom import cli  # noqa: E402  (needs the sys.path lines above)
+import attachments  # noqa: E402  (kit-side: the engine reads none of them)
 from run_state import (  # noqa: E402
-    ARTIFACTS, StateError, all_artifacts, artifact_paths, build_argv, invalidate,
-    make_invocation, normalize_invocation, read_state, write_state,
+    ARTIFACTS, KIT_NAME, KIT_VERSION, StateError, all_artifacts, artifact_paths,
+    build_argv, derive_outcome, engine_commit, invalidate, make_invocation,
+    normalize_invocation, read_state, write_state,
 )
 
 # Past this size the engine's runtime grows superlinearly, and a kit run makes
@@ -95,6 +100,80 @@ def run_engine(invocation, as_json=True):
         raise RuntimeError(
             f"engine could not read its input: {err.getvalue().strip()}")
     return buf.getvalue(), engine_exit
+
+
+def sha256_of(path):
+    """Content hash of the RFQ, streamed. Returns None if it cannot be read."""
+    h = hashlib.sha256()
+    try:
+        with open(path, "rb") as fh:
+            for chunk in iter(lambda: fh.read(1 << 20), b""):
+                h.update(chunk)
+    except OSError:
+        return None
+    return h.hexdigest()
+
+
+def build_manifest(case, invocation, paths, engine_exit, started, elapsed_ms):
+    """The run record: who produced this case, from what, and what it needs.
+
+    This is the kit's half of the Body/Compute contract (CW-2/CW-3). Nothing
+    here is a second expression of the CaseState -- `outcome` is derived from it
+    by ``run_state.derive_outcome`` and the counts come from the same summary the
+    extract phase already prints. `case_state.json` stays the engine's verbatim
+    contract and is NOT touched: new information about a run goes in a new
+    artifact, never by forking the contract.
+
+    SCOPE, stated so nobody reads more into it than it says: this records the
+    EXTRACT phase. It is written when a CaseState exists, before the renders run,
+    so a manifest does not promise that `reply.md` was produced -- the render
+    wrappers report that themselves, with their own exit codes.
+
+    `idempotency_key` hashes the input's CONTENT plus the flags, deliberately not
+    the input's path: the same email saved under a second name is the same case,
+    and Body must be able to recognise a retry without inventing an identity for
+    it.
+    """
+    commit, commit_error = engine_commit()
+    input_sha = sha256_of(invocation["input"])
+    outcome, outcome_reason = derive_outcome(case)
+    ident = json.dumps({"input_sha256": input_sha,
+                        "component_ids": invocation.get("component_ids") or [],
+                        "coc": bool(invocation.get("coc")),
+                        "config_dir": invocation.get("config_dir")},
+                       sort_keys=True)
+    evidence = attachments.scan(invocation["input"])
+    try:
+        size = os.path.getsize(invocation["input"])
+    except OSError:
+        size = None
+    return {
+        "manifest_kind": "run",
+        "manifest_kind_version": 1,
+        "kit": {"name": KIT_NAME, "version": KIT_VERSION},
+        "engine": {"source_commit": commit,
+                   "source_commit_error": commit_error,
+                   "provenance": "vendor/PROVENANCE.md"},
+        "input": {"path": invocation["input"], "sha256": input_sha, "bytes": size},
+        "invocation": invocation,
+        "idempotency_key": hashlib.sha256(ident.encode("utf-8")).hexdigest(),
+        "case_state": {"path": paths["case_state"],
+                       "schema_version": case.get("schema_version")},
+        "engine_exit": engine_exit,
+        "outcome": outcome,
+        "outcome_reason": outcome_reason,
+        "open_items_by_priority": {
+            prio: sum(1 for it in case.get("open_items") or []
+                      if (it or {}).get("priority") == prio)
+            for prio in ("blocking", "confirm", "must_acknowledge")},
+        "request_class": case.get("request_class"),
+        # What the customer sent that the engine never opened (CW-1). Carried
+        # here as well as rendered in the reply so Body can route on it without
+        # parsing prose.
+        "evidence_not_read": evidence,
+        "started_utc": started,
+        "elapsed_ms": elapsed_ms,
+    }
 
 
 def summarize(case, out_path, engine_exit):
@@ -157,9 +236,14 @@ def main(argv=None):
             _d = os.path.dirname(_p) or "."
             if _d not in _dirs:
                 _dirs.append(_d)
+    # Every undeclared sibling resolves into --out's OWN directory, never the
+    # CWD (round 35, M-2). The manifest is a sibling like any other: a suite run
+    # from the kit root must not drop a run record into a real run's _report/.
     paths = artifact_paths(case_state=args.out,
                            bom_draft=args.draft or os.path.join(
-                               _dirs[0], os.path.basename(ARTIFACTS["bom_draft"])))
+                               _dirs[0], os.path.basename(ARTIFACTS["bom_draft"])),
+                           manifest=os.path.join(
+                               _dirs[0], os.path.basename(ARTIFACTS["manifest"])))
     # EVERY DECLARED artifact, in EVERY directory this run touches. Both halves
     # are load-bearing and a previous attempt at this lost one of them:
     #
@@ -171,11 +255,21 @@ def main(argv=None):
     #
     # Iterating the declaration over the directories satisfies both; picking
     # either one alone has now failed once each.
+    #
+    # `case_state` is NOT excluded here, and that exclusion was a real defect
+    # (found while adding the manifest, 2026-09-17 — the EIGHTEENTH instance of
+    # this campaign's missed-sibling shape, and the one key that had been
+    # exempted BY NAME). With --out redirected, the previous customer's
+    # CaseState survived at the conventional `_report/case_state.json` while the
+    # new one was written elsewhere: a consumer reading the default path got
+    # customer A's case back after customer B's run. Verified before the fix and
+    # asserted below it. Re-clearing --out costs nothing: invalidate() treats a
+    # missing file as fine, so naming the same path twice is harmless, and an
+    # exemption "because --out names it" is precisely how the sibling gets
+    # missed.
     _sibling_paths = []
     for _d in _dirs:
         for _name in ARTIFACTS:
-            if _name == "case_state":
-                continue          # --out names it explicitly, below
             _cand = os.path.join(_d, os.path.basename(ARTIFACTS[_name]))
             if _cand not in _sibling_paths:
                 _sibling_paths.append(_cand)
@@ -222,11 +316,15 @@ def main(argv=None):
         return 1
     warn_if_slow(invocation["input"], passes=1)
 
+    started = datetime.datetime.now(datetime.timezone.utc).isoformat(
+        timespec="seconds")
+    t0 = time.monotonic()
     try:
         payload, engine_exit = run_engine(invocation, as_json=True)
     except RuntimeError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
+    elapsed_ms = int((time.monotonic() - t0) * 1000)
 
     try:
         os.makedirs(os.path.dirname(os.path.abspath(paths["case_state"])),
@@ -237,7 +335,8 @@ def main(argv=None):
         print(f"error: cannot write {paths['case_state']}: {e}", file=sys.stderr)
         return 1
 
-    summary = summarize(json.loads(payload), paths["case_state"], engine_exit)
+    case = json.loads(payload)
+    summary = summarize(case, paths["case_state"], engine_exit)
     try:
         # The invocation is recorded WHOLE. generate_report.py replays it.
         write_state(args.state, {"invocation": invocation, "extract_case": summary})
@@ -245,7 +344,31 @@ def main(argv=None):
         print(f"error: {e}", file=sys.stderr)
         return 1
 
-    print(json.dumps(dict(summary, input=invocation["input"]), indent=2))
+    # The run record (CW-2/CW-3). Written LAST, so it exists only for a run that
+    # produced a CaseState: absence is the failure signal, and a half-written
+    # record can never claim a case that was not extracted.
+    manifest = build_manifest(case, invocation, paths, engine_exit, started,
+                              elapsed_ms)
+    try:
+        os.makedirs(os.path.dirname(os.path.abspath(paths["manifest"])),
+                    exist_ok=True)
+        with open(paths["manifest"], "w", encoding="utf-8") as fh:
+            json.dump(manifest, fh, indent=2)
+            fh.write("\n")
+    except OSError as e:
+        print(f"error: cannot write {paths['manifest']}: {e}", file=sys.stderr)
+        return 1
+    if manifest["engine"]["source_commit_error"]:
+        print(f"warning: the run manifest cannot attribute the engine: "
+              f"{manifest['engine']['source_commit_error']}", file=sys.stderr)
+    _unread = attachments.total(manifest["evidence_not_read"])
+    if _unread:
+        print(f"warning: the customer sent {_unread} file(s) the engine does not "
+              "read; see EVIDENCE NOT READ in the reply", file=sys.stderr)
+
+    print(json.dumps(dict(summary, input=invocation["input"],
+                          outcome=manifest["outcome"],
+                          manifest=paths["manifest"]), indent=2))
     return 0
 
 

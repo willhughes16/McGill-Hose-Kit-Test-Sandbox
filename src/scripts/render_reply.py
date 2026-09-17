@@ -39,6 +39,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
+import attachments  # noqa: E402
 from run_engine import run_engine, warn_if_slow  # noqa: E402
 from run_state import (  # noqa: E402
     ARTIFACTS, StateError, artifact_path, invalidate, normalize_invocation,
@@ -199,7 +200,89 @@ def _open_item(it, show_priority=False):
     return out
 
 
-def render(case):
+def _bytes(n):
+    """A file size a human reads, or an honest admission that we do not know."""
+    if not isinstance(n, int):
+        return "size unknown"
+    if n < 1024:
+        return f"{n} B"
+    if n < 1024 * 1024:
+        return f"{n / 1024:.1f} KB"
+    return f"{n / (1024 * 1024):.1f} MB"
+
+
+def _evidence_headline(evidence):
+    """One line, ALWAYS rendered, about what the customer attached.
+
+    Always, because silence is what this feature exists to remove. If the block
+    below appeared only when there were attachments, its absence would carry two
+    meanings at once -- "none were sent" and "nobody looked" -- and a reviewer
+    would have no way to tell which. A line that says NOT CHECKED is worth more
+    than a page that says nothing.
+    """
+    evidence = evidence or attachments.not_checked("no attachment record")
+    status = evidence.get("status")
+    files = evidence.get("attachments") or []
+    inline = evidence.get("embedded") or []
+    if status != "scanned":
+        return ("Attachments: NOT CHECKED — "
+                + _safe(evidence.get("error") or status or "unknown reason")
+                + ". Open the original message.")
+    if files:
+        tail = f", plus {len(inline)} inline" if inline else ""
+        return (f"Attachments: {len(files)} the engine did NOT read{tail} "
+                "— see EVIDENCE NOT READ below")
+    if inline:
+        return (f"Attachments: {len(inline)} inline part(s) only "
+                + _safe(", ".join(str(f.get("filename")) for f in inline))
+                + " — none read by the engine")
+    return "Attachments: none in the source email"
+
+
+def _evidence_block(evidence):
+    """The prominent block, for a message carrying real attachments.
+
+    Deliberately NOT raised for inline parts alone. A block that fires on every
+    signature logo is a block reviewers learn to scroll past, and then the
+    drawing goes unread too -- so inline parts are named on the headline instead.
+    Nothing is dropped either way.
+    """
+    files = (evidence or {}).get("attachments") or []
+    inline = (evidence or {}).get("embedded") or []
+    if not files:
+        return []
+    plural = "" if len(files) == 1 else "s"
+    out = [f"EVIDENCE NOT READ — {len(files)} attached file{plural}, and the "
+           "engine opened none of them", ""]
+    for f in files:
+        out.append(f"    {_safe(f.get('filename'))}   "
+                   f"{_safe(f.get('content_type'))}   {_bytes(f.get('bytes'))}"
+                   + (f"   ({_safe(f.get('error'))})" if f.get("error") else ""))
+    out += [
+        "",
+        "  The engine reads the message TEXT only — there is no attachment "
+        "handling in it",
+        "  at all. Anything the customer put in these files is NOT in this case, "
+        "and the",
+        "  open items below were derived without it. Open them before you answer. "
+        "If they",
+        "  carry specifications, put those into the thread as text and run the "
+        "case again.",
+    ]
+    if inline:
+        # Named, not merely counted. The headline counts them; if the block
+        # showed only a number, a file the customer sent would appear NOWHERE by
+        # name -- which is this campaign's most-repeated finding, and the exact
+        # thing this whole block exists to stop.
+        out += ["",
+                "  Also present inline and equally unread (usually signature "
+                "images): "
+                + _safe(", ".join(str(f.get("filename")) for f in inline))]
+    out.append("")
+    return out
+
+
+def render(case, evidence=None):
     """Build the reply body. Pure function of the CaseState."""
     L = []
     # Keys this run actually rendered. Round 34 (H-2) found the previous
@@ -232,6 +315,7 @@ def render(case):
     L.append(f"Open items: {len(items)}"
              + (f" ({blocking} blocking a quote)" if blocking else ""))
     L.append(f"Draft BOM lines: {len(lines)}")
+    L.append(_evidence_headline(evidence))
     # `classes` carries requirements the operator must honour — Certs Required
     # from a C-of-C request is the one that matters. Round 32 pre-flight found it
     # dropped entirely, which for a certificate requirement is exactly the kind
@@ -254,6 +338,11 @@ def render(case):
         if extra:
             L.append(f"  routing (other): {_safe(json.dumps(extra, sort_keys=True))}")
     L.append("")
+
+    # The attachments come FIRST among the sections: an unread drawing changes
+    # how every ask below should be read, so a reviewer must meet it before the
+    # list of things the engine says are missing.
+    L.extend(_evidence_block(evidence))
 
     # ---- what must be answered, highest priority first -----------------------
     if items:
@@ -528,6 +617,23 @@ def main(argv=None):
     # CLEARED, a fabricated price -- beneath its own footer swearing no price
     # appears. The reply is the ONLY artifact a human reads, so it needs the
     # guard more than the draft does, not less.
+    # What the customer attached (CW-1) is DERIVED from the input file, never
+    # read from a record the extract phase wrote -- a second copy of a fact is a
+    # copy that can drift, and this one would drift towards telling a reviewer
+    # there was nothing to open.
+    #
+    # It is derived ONLY inside the reconciled branch, and that placement is the
+    # point. `--state` defaults to `_report/state.json`; rendering a CaseState in
+    # isolation (`--case-state X --no-reconcile`) would otherwise scan whatever
+    # email an UNRELATED run happened to leave recorded there, and attribute one
+    # customer's attachments to another customer's case. Reconciliation is
+    # exactly the proof that the recorded invocation reproduces THIS CaseState,
+    # so it is also the only ground on which its input may be read. Without that
+    # proof the reply says NOT CHECKED, which is true, instead of a confident
+    # answer about the wrong email.
+    evidence = attachments.not_checked(
+        "the reply was rendered without reconciliation, so the recorded "
+        "invocation is not proven to describe this case")
     if args.no_reconcile:
         print("warning: --no-reconcile — the reply is NOT being checked against a "
               "re-derived CaseState", file=sys.stderr)
@@ -558,8 +664,11 @@ def main(argv=None):
                   "       reply that is silently wrong. Re-run the extract phase.\n"
                   f"       differing top-level keys: {differing}", file=sys.stderr)
             return 1
+        # Reconciled: this invocation provably produced this CaseState, so its
+        # input file is provably this case's email.
+        evidence = attachments.scan(invocation["input"])
 
-    body = render(case)
+    body = render(case, evidence)
     try:
         os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
         with open(out, "w", encoding="utf-8") as fh:

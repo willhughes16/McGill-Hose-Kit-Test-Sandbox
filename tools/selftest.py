@@ -17,6 +17,7 @@ Exit 0 = every defence held. Exit 1 = a defence is gone.
 """
 from __future__ import annotations
 
+import email.message
 import hashlib
 import json
 import os
@@ -109,6 +110,42 @@ def sha256(path):
 def eml(d, name, text):
     with open(os.path.join(d, name), "w", encoding="utf-8") as fh:
         fh.write(text)
+    return name
+
+
+def read(d, name):
+    """A _report artifact as text, or "" when it is absent (a clean FAIL)."""
+    try:
+        with open(os.path.join(d, "_report", name), encoding="utf-8") as fh:
+            return fh.read()
+    except OSError:
+        return ""
+
+
+def read_json(d, name):
+    try:
+        with open(os.path.join(d, "_report", name), encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def attach_eml(d, name, body, files, inline):
+    """Write a real MIME message carrying attachments the engine cannot read."""
+    msg = email.message.EmailMessage()
+    msg["From"] = "buyer@example.com"
+    msg["To"] = "sales@example.com"
+    msg["Subject"] = "RFQ"
+    msg.set_content(body)
+    for filename, maintype, subtype, payload in files:
+        msg.add_attachment(payload, maintype=maintype, subtype=subtype,
+                           filename=filename)
+    for filename, maintype, subtype, payload in inline:
+        msg.add_attachment(payload, maintype=maintype, subtype=subtype,
+                           filename=filename, disposition="inline",
+                           cid=f"<{filename}>")
+    with open(os.path.join(d, name), "wb") as fh:
+        fh.write(bytes(msg))
     return name
 
 
@@ -917,6 +954,178 @@ check("a new extraction clears the previous reply",
       "reply.md" not in artifacts(d), f"artifacts={artifacts(d)}")
 shutil.rmtree(d)
 
+
+print("CW-1 — the engine reads NO attachment, and the reply must say so")
+# The defect this closes: mail.py reduces a MIME message to "Subject + best body
+# part" and there is no attachment handling anywhere in the engine, so an RFQ
+# whose dimensions are in the attached drawing yields a case that correctly
+# reports them missing and never mentions the drawing. The case reads complete
+# while the document the customer considered the answer was never opened.
+d = tempfile.mkdtemp()
+os.makedirs(os.path.join(d, "_report"), exist_ok=True)
+attach_eml(d, "rfq.eml",
+           "Need 4 hoses per the attached drawing. 150 psi steam, 316 SS.",
+           [("drawing-A-1042.pdf", "application", "pdf", b"%PDF-1.4 " + b"x" * 4000)],
+           [("mcgill-logo.png", "image", "png", b"\x89PNG")])
+prepare(d, "rfq.eml")
+phase1(d, "rfq.eml")
+rc, _, err = sh([REPLY, "--state", "_report/state.json"], d)
+reply = read(d, "reply.md")
+manifest = read_json(d, "run_manifest.json")
+check("the reply renders for a message carrying attachments", rc == 0, err.strip()[:120])
+# The relation, not the wording: EVERY file the scan found must appear in the
+# reply BY NAME. A count would let a file the customer sent appear nowhere.
+named = [f["filename"] for f in (manifest.get("evidence_not_read") or {}).get("attachments", [])
+         + (manifest.get("evidence_not_read") or {}).get("embedded", [])]
+check("the scan found both parts the engine cannot read", sorted(named) ==
+      ["drawing-A-1042.pdf", "mcgill-logo.png"], f"named={named}")
+check("EVERY unread file is named in the reply",
+      bool(named) and all(n in reply for n in named),
+      f"missing={[n for n in named if n not in reply]}")
+check("the attached drawing is named in the reply", "drawing-A-1042.pdf" in reply)
+check("the run manifest carries the same unread files",
+      (manifest.get("evidence_not_read") or {}).get("status") == "scanned"
+      and len((manifest["evidence_not_read"]).get("attachments") or []) == 1)
+shutil.rmtree(d)
+
+print("CW-1b — a message with no attachments SAYS none, rather than staying silent")
+# Absence of the block must not carry two meanings at once. A deliberate wording
+# anchor: if the label is renamed this check fails, which is the cheap direction.
+d = workdir(("rfq.eml", "plain-steam"))
+prepare(d, "rfq.eml")
+phase1(d, "rfq.eml")
+sh([REPLY, "--state", "_report/state.json"], d)
+reply = read(d, "reply.md")
+check("a clean message still states the attachment position",
+      "Attachments:" in reply, "silence and 'none' would be indistinguishable")
+check("and it does not raise the unread-evidence block",
+      "EVIDENCE NOT READ" not in reply)
+shutil.rmtree(d)
+
+print("CW-1c — an unreconciled render never attributes ANOTHER case's attachments")
+# `--state` defaults to _report/state.json. Rendering a CaseState in isolation
+# must not scan whatever email an unrelated run left recorded there: that would
+# print customer A's drawing on customer B's reply.
+d = tempfile.mkdtemp()
+os.makedirs(os.path.join(d, "_report"), exist_ok=True)
+attach_eml(d, "A.eml", "Customer A needs 4 hoses per the attached drawing.",
+           [("A-SECRET-DRAWING.pdf", "application", "pdf", b"%PDF-1.4 A")], [])
+shutil.copy(os.path.join(FIX, "plain-steam", "input.eml"), os.path.join(d, "B.eml"))
+prepare(d, "A.eml")
+phase1(d, "A.eml")                      # state.json now describes A
+rc, _, _ = sh([RUN, "--in", "B.eml", "--state", os.path.join("_report", "b_state.json"),
+               "--out", os.path.join("_report", "b_case.json")], d)
+rc2, _, _ = sh([REPLY, "--case-state", os.path.join("_report", "b_case.json"),
+                "--no-reconcile", "--out", os.path.join("_report", "b_reply.md")], d)
+b_reply = read(d, "b_reply.md")
+check("B's isolated reply renders", rc == 0 and rc2 == 0)
+check("customer A's attachment does NOT appear on customer B's reply",
+      "A-SECRET-DRAWING.pdf" not in b_reply)
+check("and B's reply says the attachments were not checked",
+      "NOT CHECKED" in b_reply, "an unchecked render must not imply 'none'")
+shutil.rmtree(d)
+
+print("CW-2 — every run records WHO produced the case, from WHAT")
+d = workdir(("rfq.eml", "plain-steam"))
+prepare(d, "rfq.eml")
+phase1(d, "rfq.eml")
+mf = read_json(d, "run_manifest.json")
+with open(os.path.join(ROOT, "kit.json"), encoding="utf-8") as fh:
+    kit_json = json.load(fh)
+check("a run writes a manifest", bool(mf))
+check("the manifest's kit version equals kit.json",
+      mf.get("kit", {}).get("version") == kit_json["version"],
+      f"manifest={mf.get('kit', {}).get('version')} kit.json={kit_json['version']}")
+check("the manifest's kit name equals kit.json",
+      mf.get("kit", {}).get("name") == kit_json["name"])
+# Independently re-derived here, so a PROVENANCE format change fails the suite
+# instead of silently leaving every case unattributed.
+with open(os.path.join(ROOT, "src", "vendor", "PROVENANCE.md"), encoding="utf-8") as fh:
+    stamped = re.search(r"\|\s*Source commit\s*\|\s*`([0-9a-f]{7,40})`", fh.read())
+check("the manifest attributes the engine to PROVENANCE's commit",
+      bool(stamped) and mf.get("engine", {}).get("source_commit") == stamped.group(1),
+      f"manifest={mf.get('engine', {}).get('source_commit')}")
+check("no attribution error is recorded on a good run",
+      mf.get("engine", {}).get("source_commit_error") is None)
+check("the manifest records the input's content hash",
+      mf.get("input", {}).get("sha256") == sha256(os.path.join(d, "rfq.eml")))
+key_1 = mf.get("idempotency_key")
+shutil.rmtree(d)
+
+print("CW-2b — the idempotency key follows the CONTENT, not the filename")
+d = workdir(("other-name.eml", "plain-steam"))
+prepare(d, "other-name.eml")
+phase1(d, "other-name.eml")
+key_2 = read_json(d, "run_manifest.json").get("idempotency_key")
+check("the same email under another name gets the same key",
+      bool(key_1) and key_1 == key_2, f"{key_1} vs {key_2}")
+phase1(d, "other-name.eml", "--coc")
+key_3 = read_json(d, "run_manifest.json").get("idempotency_key")
+check("a different invocation gets a different key", key_2 != key_3)
+shutil.rmtree(d)
+
+print("CW-3 — the outcome is DERIVED from the case, not asserted beside it")
+# The relation is asserted on both sides, on real runs: an independently-set
+# flag, or one hard-coded to either value, fails one of these two.
+for label, body, expect in (
+        ("a case with a blocking item",
+         "Need 4 hoses 1/2 ID steam 36 inch 316 SS at 150 psi. Line runs at 1450 psig.",
+         "needs_human_input"),
+        ("a case with no blocking item",
+         "Need 4 hoses, 1/2 ID, 36 inch, 316 SS, steam at 150 psi.",
+         "complete")):
+    d = tempfile.mkdtemp()
+    os.makedirs(os.path.join(d, "_report"), exist_ok=True)
+    eml(d, "rfq.txt", body)
+    prepare(d, "rfq.txt")
+    phase1(d, "rfq.txt")
+    mf = read_json(d, "run_manifest.json")
+    case = read_json(d, "case_state.json")
+    blocking = [i for i in case.get("open_items", []) if i.get("priority") == "blocking"]
+    check(f"{label} really does{'' if expect == 'needs_human_input' else ' not'} "
+          "carry one", bool(blocking) == (expect == "needs_human_input"),
+          f"blocking={[i['code'] for i in blocking]}")
+    check(f"{label} reports outcome={expect}", mf.get("outcome") == expect,
+          f"got {mf.get('outcome')!r}")
+    check(f"{label}: outcome matches the CaseState it came from",
+          (mf.get("outcome") == "needs_human_input") == bool(blocking))
+    shutil.rmtree(d)
+
+print("CW-3b — a FAILED run leaves no manifest: absence is the failure signal")
+# `failed` is deliberately absent from the outcome vocabulary. A run that did not
+# produce a CaseState must not leave a record that says anything about one, and
+# the previous run's record must not survive to be mistaken for this one's.
+d = workdir(("rfq.eml", "plain-steam"))
+prepare(d, "rfq.eml")
+phase1(d, "rfq.eml")
+check("a good run leaves a manifest", "run_manifest.json" in artifacts(d))
+rc, _, _ = phase1(d, "no-such-file.eml")
+check("a failed extraction exits 1", rc == 1)
+check("and leaves NO manifest behind", "run_manifest.json" not in artifacts(d),
+      f"artifacts={artifacts(d)}")
+shutil.rmtree(d)
+
+print("2026-09-17 — a redirected --out leaves NO previous customer's CaseState behind")
+# The eighteenth instance of this campaign's missed-sibling shape, and the one
+# key that had been exempted BY NAME from the invalidation loop: with --out
+# redirected, customer A's case survived at the conventional
+# _report/case_state.json while B's was written elsewhere.
+d = workdir(("A.eml", "confirmed-ids"), ("B.eml", "plain-steam"))
+os.makedirs(os.path.join(d, "other"), exist_ok=True)
+prepare(d, "A.eml")
+phase1(d, "A.eml")
+check("A's CaseState is at the conventional path after A's run",
+      "case_state.json" in artifacts(d))
+rc, _, err = sh([RUN, "--in", "B.eml", "--state", "_report/state.json",
+                 "--out", os.path.join("other", "case_state.json")], d)
+check("B's redirected extraction succeeds", rc == 0, err.strip()[:90])
+check("customer A's stale CaseState did not survive B's extraction",
+      "case_state.json" not in artifacts(d), f"artifacts={artifacts(d)}")
+check("B's own CaseState and manifest landed beside --out",
+      sorted(os.listdir(os.path.join(d, "other"))) == ["case_state.json",
+                                                       "run_manifest.json"],
+      f"other={sorted(os.listdir(os.path.join(d, 'other')))}")
+shutil.rmtree(d)
 
 failed = [r for r in results if not r[1]]
 print(f"\n{len(results) - len(failed)}/{len(results)} defences held")

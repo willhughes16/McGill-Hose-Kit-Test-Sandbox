@@ -15,7 +15,14 @@ never re-asks something already answered. The deterministic engine doing the wor
 is vendored verbatim under `vendor/`; the kit wraps it, it does not reimplement it.
 The reply carries **no attachment**: the whole case goes in the message body, so
 `_report/reply.md` is what you send. `_report/case_state.json` remains the
-machine-readable contract on disk for a conversation layer to consume.
+machine-readable contract on disk for a conversation layer to consume, and
+`_report/run_manifest.json` records who produced it and whether it needs a human.
+
+One thing the engine does NOT do is read what the customer attached. It sees
+"Subject + best body part" and nothing else, so an RFQ whose dimensions are in
+the attached drawing yields a case that correctly reports them missing and knows
+nothing about the drawing. The kit therefore names every attached file it finds,
+in the reply and in the manifest, without opening any of them.
 
 ## How to run
 
@@ -79,6 +86,16 @@ line:
   read JSON for information the reply already states in words.
 - **Never summarise `reply.md` down.** It is already the summary, and every line in
   it is something the engine refused to assume. Send it, or frame it lightly.
+- **Never open, read or summarise an attachment.** The engine reads the message
+  TEXT only — there is no attachment handling in it at all. The kit NAMES the
+  files the customer sent (EVIDENCE NOT READ in the reply, `evidence_not_read` in
+  the run manifest) and stops there. Reading one yourself would put case data
+  into the answer from outside the engine, with none of its guarantees, and every
+  open item below it was derived without that file. Tell the operator to open it.
+- **Never read `outcome: complete` as "ready to send".** It means only that
+  nothing BLOCKS a quote. Every case this kit produces is a draft a human
+  reviews; `complete` versus `needs_human_input` is a routing distinction, not an
+  approval.
 - **Never treat a missing artifact as equivalent to a stale one.** The scripts delete
   a previous run's artifacts before doing anything that can fail, on purpose: no
   artifact is an honest error, a leftover one is a silent wrong answer.
@@ -90,6 +107,7 @@ line:
 | `_report/reply.md` | **What you send, as the message body.** The whole case inline: request class and urgency, open items grouped by priority (with a `route` on the items that carry one — it is optional and most do not), every field with its status and evidence, the draft BOM, harness-held checkpoints, corrections found in the thread, and knowledge provenance. |
 | `_report/case_state.json` | The machine contract a conversation layer consumes. Conforms to `schemas/case_state.schema.json`. **Not attached** — cite it, do not send it. |
 | `_report/bom_draft.md` | The engine's own verbatim rendering, byte-identical to what the source engine prints. A **lossy** view kept for parity, not for sending. |
+| `_report/run_manifest.json` | **The run record** a conversation layer reads: which kit version and which engine commit produced this case, the input's sha256 and an `idempotency_key` derived from it, the `outcome` (`complete` / `needs_human_input`), and `evidence_not_read` — the files the customer attached that the engine never opened. Written by the extract phase. |
 | `_report/state.json` | The run's `invocation` record (written by prepare, read by the later phases) plus the extract result. Not a deliverable. |
 
 ## Reference material

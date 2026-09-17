@@ -597,6 +597,80 @@ would give a customer a wrong answer. They are IOUs, not unknowns.
 3. An engine failure leaves a **0-byte** `case_state.json`.
 4. The *falsy* knowledge-extras variant cannot fail (one layer below a check that can).
 
+### Coworker alignment — CW-1..CW-3 SHIPPED in v0.16.0
+
+Derived from the Coworker architecture document (Body / Compute / Memory / Factory),
+assessed in `COWORKER_ALIGNMENT.md` on 2026-09-17. This kit is one Compute skill —
+the document's Evolution 1. It contradicted none of the document's safety rules;
+what it lacked was the contract surface Body needs. Three of the eight proposed
+features are now in:
+
+- REQ-092 **The reply NAMES every file the engine did not read (CW-1).** The engine
+  has no attachment handling at all: `mail.py` reduces a MIME message to "Subject +
+  best body part", and there is no `walk()`, no `Content-Disposition` inspection and
+  no filename capture anywhere in it. So an RFQ whose dimensions are in the attached
+  drawing produced a case that correctly reported them missing and said **nothing
+  about the drawing** — a case that reads complete while the document the customer
+  considered the answer was never opened. `scripts/attachments.py` names the parts;
+  the reply carries an `EVIDENCE NOT READ` block and a headline that is rendered on
+  EVERY reply, including "none", so absence of the block cannot mean both "none were
+  sent" and "nobody looked". Nothing is opened, decoded or summarised, and no open
+  item is added — `open_items[]` is the engine's. Inline parts with a Content-ID are
+  named on a quieter line: a block that fires on every signature logo is a block
+  reviewers learn to skip, and then the drawing goes unread too.
+  **The proper fix is upstream:** an `ATTACHMENT_NOT_READ` open item in
+  `ScaleUpLabs/McGill-Core`, beside `HTML_SOURCE_REVIEW` and
+  `HIDDEN_CONTENT_DETECTED`, which already exist for "I saw something I could not
+  safely read". This is the kit-side interim. **Mutation-proved:** deleting the
+  block, the headline, or the inline naming each fails 1–2 checks.
+- REQ-093 **The scan happens ONLY on the reconciled path.** `--state` defaults to
+  `_report/state.json`, so rendering a CaseState in isolation would otherwise scan
+  whatever email an unrelated run left recorded there and print customer A's drawing
+  on customer B's reply. Reconciliation is exactly the proof that the recorded
+  invocation reproduces THIS CaseState, so it is the only ground on which its input
+  may be read; without it the reply says NOT CHECKED. **Mutation-proved:** moving the
+  scan outside the branch fails 2 checks, one of them by naming A's file on B's page.
+- REQ-094 **Every run writes `_report/run_manifest.json` (CW-2).** Kit name and
+  version, the engine's source commit read from `vendor/PROVENANCE.md`, the input's
+  sha256 and byte count, the whole invocation, an `idempotency_key`, the CaseState's
+  path and schema version, `engine_exit`, the outcome, the open-item counts and
+  `evidence_not_read`. `case_state.json` is NOT touched: new information about a run
+  goes in a new artifact, never by forking the engine's contract. The key hashes the
+  input's CONTENT plus the flags and deliberately not its path, so the same email
+  saved under a second name is recognised as the same case. `KIT_VERSION` is a second
+  copy of `kit.json`'s version (kit.json cannot ship inside the zip — it carries that
+  zip's own sha256), kept honest by a selftest assertion; it caught a stale value on
+  its first run. **Mutation-proved:** an unwritten manifest fails 13 checks, a broken
+  PROVENANCE regex 2, a path-sensitive key 1.
+- REQ-095 **The outcome is stated in words and DERIVED (CW-3).** `engine_exit` cannot
+  serve: 2 means "a draft with open items", the normal result for essentially every
+  real RFQ, and every document here spends a bullet warning against reading it as
+  failure. `run_state.derive_outcome` returns `needs_human_input` when anything blocks
+  a quote and `complete` otherwise, computed from `open_items[]` rather than set
+  alongside it. `complete` does NOT mean sendable — every case is a draft a human
+  reviews. **Failure is deliberately not in the vocabulary:** a failed run writes no
+  manifest and the wrapper exits 1, so absence is the failure signal and cannot be
+  faked by a half-written record. **Mutation-proved:** hard-coding either value fails
+  2 checks.
+- REQ-096 **A redirected `--out` leaves no previous customer's CaseState behind.**
+  Found while adding the manifest to the invalidation loop, and the EIGHTEENTH
+  instance of this campaign's missed-sibling shape — this time on the one key that had
+  been exempted BY NAME (`if _name == "case_state": continue`, justified as "--out
+  names it explicitly"). With `--out` redirected, customer A's case survived at the
+  conventional `_report/case_state.json` while B's was written elsewhere, so a
+  consumer reading the default path got A's case back after B's run. Not reachable on
+  the recipe path, which never redirects `--out`; reachable by the suites and by any
+  Body integration using per-case directories. Verified by execution before the fix.
+  **Mutation-proved:** restoring the exemption fails the check.
+
+Suites at closure: completeness 184/0, selftest **157/157**, parity 7/7, golden 2/2,
+manifest valid. Mutation run: **10 mutations, 10 caught, 0 survivors.**
+
+The remaining five features (CW-4 review-request artifact, CW-5 resolvable owners,
+CW-6 out-of-band answers, CW-7 correction record, CW-8 knowledge freshness) are
+specified in `COWORKER_ALIGNMENT.md` and NOT built. CW-6 is flagged there as the one
+most likely to fail a verification round and should get one of its own.
+
 ## Constraints
 
 - **Never edit `src/vendor/`** to change an outcome. It is a stamped verbatim copy;

@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 
 # Every artifact a run produces, relative to the run directory. Invalidation
 # walks this mapping — a new artifact is declared once, here, and every clearing
@@ -35,10 +36,84 @@ ARTIFACTS = {
     # The inline reply body. The kit attaches nothing: everything an operator
     # needs is in the message, so this is the deliverable a human reads.
     "reply": os.path.join("_report", "reply.md"),
+    # The run record: who produced this case, from what, and whether it needs a
+    # human. Not a deliverable -- the Body/Compute contract's half of the run.
+    "manifest": os.path.join("_report", "run_manifest.json"),
 }
 
 # The engine invocation's shape. Adding an argument means adding it here.
 INVOCATION_KEYS = ("input", "component_ids", "coc", "config_dir")
+
+# WHO produced a case. A proposal a reviewer corrects is worthless to Factory if
+# nothing records which version of which skill made it, so these travel in the
+# run manifest with every case.
+#
+# `kit.json` is the source of truth for the version and is NOT shipped inside
+# `dist/kit.zip` (it carries that zip's own sha256, so it cannot contain
+# itself). This constant is therefore a second copy -- the shape that has caused
+# most of this campaign's findings -- and it is kept honest the only way a second
+# copy can be: `tools/selftest.py` asserts it equals `kit.json`, so a version
+# bump that forgets this line fails the suite instead of mis-attributing a case.
+KIT_NAME = "mcgill-email-to-bom"
+KIT_VERSION = "0.16.0"
+
+# The outcome vocabulary at the Body/Compute boundary (CW-3).
+#
+# `engine_exit` cannot serve this purpose: 2 means "a draft with open items",
+# the normal result for essentially every real RFQ, and every document in this
+# kit has to spend a bullet warning people not to read it as failure. So the
+# manifest states the outcome in words, DERIVED from the CaseState rather than
+# set alongside it -- an independently-assigned flag is a second copy that can
+# drift, which is failure shape #1 of this campaign.
+#
+# FAILURE IS NOT IN THIS VOCABULARY, on purpose. A failed run writes no
+# manifest at all and the wrapper exits 1, which the clamp in every wrapper
+# enforces. Absence is the failure signal, and it cannot be faked by a
+# half-written record.
+OUTCOME_COMPLETE = "complete"
+OUTCOME_NEEDS_HUMAN = "needs_human_input"
+
+
+def derive_outcome(case):
+    """(outcome, reason) for a CaseState. Pure, and derived from the items.
+
+    `complete` does NOT mean sendable. Every case this kit produces is a draft a
+    human reviews; `complete` means only that nothing in it BLOCKS a quote. The
+    distinction the outcome carries is the one Body needs to route: must a human
+    answer something before this can move, or can it go to review as it stands.
+    """
+    items = (case or {}).get("open_items") or []
+    blocking = [i for i in items if (i or {}).get("priority") == "blocking"]
+    if blocking:
+        codes = sorted({str(i.get("code")) for i in blocking})
+        return OUTCOME_NEEDS_HUMAN, (
+            f"{len(blocking)} blocking open item(s): {', '.join(codes)}")
+    if items:
+        return OUTCOME_COMPLETE, (
+            f"{len(items)} open item(s), none blocking a quote")
+    return OUTCOME_COMPLETE, "no open items"
+
+
+def engine_commit():
+    """The vendored engine's source commit, read from its PROVENANCE stamp.
+
+    Returns (commit, error). Never raises and never guesses: if the stamp cannot
+    be read the commit is None and the reason is returned, so the manifest
+    records that the engine is unattributed rather than attributing it wrongly.
+    `tools/selftest.py` asserts a real commit comes back, so a PROVENANCE format
+    change fails the suite here rather than degrading silently in production.
+    """
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "vendor", "PROVENANCE.md")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+    except OSError as e:
+        return None, f"cannot read {path}: {e}"
+    m = re.search(r"\|\s*Source commit\s*\|\s*`([0-9a-f]{7,40})`", text)
+    if not m:
+        return None, f"no 'Source commit' row found in {path}"
+    return m.group(1), None
 
 
 class StateError(Exception):

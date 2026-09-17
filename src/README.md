@@ -100,4 +100,10 @@ drift. Parity with the source is proven by
 - **No graph or network access.** The vendored engine ships offline: knowledge
   source is `none`. The live-knowledge adapter exists in `vendor/` but is dormant
   and not wired into this kit — see the deferred follow-ups in the project notes.
+- **Attachments are named, never read.** The engine has no attachment handling:
+  it reduces a MIME message to "Subject + best body part". The kit lists what the
+  customer attached (`EVIDENCE NOT READ` in the reply, `evidence_not_read` in the
+  run manifest) so the omission is visible, but the content of a drawing or a
+  spec sheet is not in the case. The proper fix is an `ATTACHMENT_NOT_READ` open
+  item upstream in `McGill-Core`.
 - **One email per run.**
