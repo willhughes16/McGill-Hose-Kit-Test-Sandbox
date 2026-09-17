@@ -3,49 +3,69 @@
 You are continuing a blind-verification campaign on this kit. Rounds 25–36 all
 returned FAIL, and in every case the defect was introduced by the fix pass for the
 previous round. Full reports are `VERIFICATION_ROUND25.md` … `VERIFICATION_ROUND36.md`;
-the requirement ledger is `.astrocode/PROJECT.md` (REQ-001…REQ-083).
+the requirement ledger is `.astrocode/PROJECT.md` (REQ-001…REQ-096).
 
 The operator's standing instruction: **run rounds, fix findings, and publish when
 ready.** They have twice authorised rolling a bad version back off the instance, and
 both rollbacks worked.
 
+> **READ THIS BEFORE PLANNING A ROUND: the engine underneath changed.** Rounds 25–36
+> all ran against the engine as vendored at `b15b23d`. The kit now vendors
+> **`ae4411f`** — one commit later, and a behavioural one ("size is not a length").
+> **No round has ever tested the engine this kit currently ships.** That is the single
+> most important fact in this file, and it is why round 37 exists.
+
 ---
 
-## STATE AS OF THIS FILE (uncommitted work in the tree)
+## STATE AS OF THIS FILE (2026-09-17 — all work is MERGED to `main`)
 
-Round 36 returned FAIL. Its findings were **partly** addressed and **mostly
-unverified**, because a sandbox classifier blocked shell commands mid-pass.
+`main` is at `dc0a05e`, the merge of PR #1. Working tree clean. **`kit.json` and the
+built `dist/kit.zip` are at v0.16.0 and current** — unlike the last two times this file
+was written, the artifact is not stale.
 
-Fixed but NOT verified by execution:
-- **C-1** (the blocker, 17th missed sibling) — `bom_columns` vanished from the reply on
-  the `lines == []` branch. Fixed in `render_reply.py`. **Verified** by
-  `tools/completeness.py` (it no longer reports `bom_columns`).
-- **H-2** — round 35's own M-2 fix reintroduced R26-F1: with `--out` redirected, the
-  run's own `_report/reply.md` survived. `run_engine.py` now clears the union of
-  `--out`'s and `--state`'s directories. **Never executed.**
-- **H-3** — four false `route` claims (recipe, README, EXAMPLES, CLAUDE.md): 23 of 24
-  open items carry no `route`, and EXAMPLES made it load-bearing for the conversation
-  layer. **Never executed.**
-- **`tools/completeness.py`** (new) — the structural guard round 36's K-3 asked for.
-  Asserts every non-empty CaseState key and every leaf value reaches the reply, over a
-  pairwise cross-product of 14 axes. It found C-1 in seconds where the golden suite
-  structurally could not. Its first run reported 6 false positives (nested dict key
-  names); that was corrected — see the docstrings for why vocabulary ≠ content.
+What landed since round 36, in order:
 
-**The built artifact is STALE.** `kit.json` says 0.13.0 and `dist/kit.zip` is the
-0.13.0 build, which does NOT contain the above fixes. Do not publish or verify against
-the zip until it is rebuilt.
+- **The engine was re-vendored at `ae4411f`** (commit `f6e8d38`) — "size is not a
+  length", scored against **140 real McGill threads**. Size captured **6 → 68 of 131**;
+  three phantom lengths eliminated (the extractor was reading a phone number as a hose
+  length). It also found that this kit's own parity fixture had *enshrined* the defect,
+  so four expecteds were re-captured with the diffs read. `src/vendor/**` is
+  byte-identical to `~/Desktop/McGill/email-to-bom-agent` at `ae4411f`.
+- **Round 36's backlog is closed** (commit `81006e7`), each item mutation-proved by
+  execution: REQ-088 (`UNCONFIRMED` enumeration deleted — 6 of 10 members had been
+  deletable with the suite green), REQ-089 (loud `write_state` failure), REQ-090 (no
+  0-byte CaseState), REQ-091 (falsy knowledge-extras). Coverage 110 → 129.
+- **v0.16.0 — CW-1..CW-3** (commit `0aa2932`), derived from the Coworker architecture
+  document; the assessment and the five unbuilt features are in
+  `COWORKER_ALIGNMENT.md`. New: `src/scripts/attachments.py` names every file the
+  engine never read (it has no attachment handling at all), `_report/run_manifest.json`
+  records kit version / engine commit / input sha256 / `idempotency_key` /
+  `evidence_not_read`, and `outcome` states `complete` vs `needs_human_input` in words,
+  **derived** from `open_items[]`. REQ-092…REQ-096.
+- **REQ-096**, found while doing the above: with `--out` redirected, the previous
+  customer's CaseState survived at the conventional `_report/case_state.json`. The
+  **eighteenth** missed sibling, on the one key that had been exempted *by name*.
 
-### Open findings from round 36, deliberately untouched
+Suites at `dc0a05e`: selftest **160/160**, parity 7/7 (zero normalizations), golden
+2/2, completeness 184 combinations / 0 violations, manifest valid, zip `2945d8ea`.
+Mutation run on the new work: **11 mutations, 11 caught, 0 survivors.**
 
-Not fixed, because writing a check that cannot be executed is how this campaign's
-vacuous checks were born:
+### Nothing is carried forward as an open finding
 
-1. **6 of 10 `UNCONFIRMED` members are deletable with the suite green** — one is live on
-   a plain camlock email. This is the sharpest open item.
-2. `write_state` swallowing `OSError` exits **0** with no state record.
-3. An engine failure leaves a **0-byte** `case_state.json`.
-4. The *falsy* knowledge-extras variant cannot fail (one layer below a check that can).
+Round 36's four open items are all closed and mutation-proved. There is no backlog to
+clear before round 37 — which is unusual for this campaign, and means the round starts
+clean rather than against a fix pass.
+
+### Two things deliberately left undecided — do not "fix" them silently
+
+1. **An unread attachment does not force `needs_human_input`.** A case whose dimensions
+   are in an unopened drawing can report `outcome: complete`, because the outcome is
+   derived from `open_items[]` alone and none of them blocks. This is correct by
+   REQ-095's definition and arguably still wrong for routing. It is the operator's call,
+   and it is recorded in PR #1. A verifier may legitimately report it as a finding; it
+   is not an oversight.
+2. **`CW-4`…`CW-8` are specified and unbuilt.** See `COWORKER_ALIGNMENT.md`. Their
+   absence is not a defect.
 
 ---
 
@@ -59,16 +79,34 @@ python3 tools/parity_check.py --manifest tools/parity/parity.json
 python3 tools/parity_check.py --manifest tools/golden/golden.json
 ```
 
-If any is red, fix it before anything else — a red suite here means an unverified fix
-was wrong. Then:
+All four should be green at `dc0a05e`. If any is red, stop and find out why before
+anything else: nothing was left unverified this time, so a red suite means something
+changed underneath. Then:
 
-1. Fix the four open findings above, and **mutation-test each fix**: break it, watch the
-   suite fail and name the case, restore. A fix is not closed until its check has been
-   seen to fail.
-2. Bump `kit.json` and `registry-entry.json` to **0.14.0**, run `./tools/build_kit.sh`,
-   confirm `validate_manifest.py` exits 0 and the zip sha matches.
-3. Commit and push.
-4. Run **round 37** (see below).
+1. Confirm the vendored engine is what you think it is:
+
+   ```bash
+   diff -r -x '__pycache__' src/vendor/email_to_bom ~/Desktop/McGill/email-to-bom-agent/email_to_bom
+   ```
+
+   Expect NO output with the clone at `ae4411f` (verified 2026-09-17).
+   `-x '__pycache__'` matters: without it the two trees' compiled bytecode differs and
+   the result reads like a vendor mismatch when nothing is wrong.
+   `src/vendor/PROVENANCE.md` carries the stamp.
+
+2. **Run round 37.** There is no backlog to clear first. Aim it at the engine change:
+   rounds 25–36 tested `b15b23d`, and the shipped engine is now `ae4411f`. The
+   highest-value targets, in order:
+   - **the re-vendor itself** — size/length extraction on real-shaped threads, and
+     whether the four re-captured parity expecteds are right rather than merely
+     self-consistent (the old ones enshrined a live defect, which is the precedent);
+   - **`attachments.py` and the evidence block** — new code on the shipped path, and the
+     one place where a scan of the wrong file would put customer A's drawing on customer
+     B's reply (REQ-093 guards exactly that; try to get past it);
+   - **the run manifest** — whether `outcome` can disagree with the CaseState it came
+     from, and whether a failed run can leave one behind.
+
+3. Only then consider publishing (see PUBLISHING).
 
 ---
 
@@ -81,8 +119,8 @@ was wrong. Then:
    rounds 33, 34 and 35 each **refuted** one, and round 36 settled a carried-forward
    doubt by execution.
 3. Spawn the `twyd-factory:twyd-verifier` agent, background, with: the artifact path and
-   HEAD, the source-of-truth clone (`~/Desktop/McGill/email-to-bom-agent`, `b15b23d`,
-   read-only), the bar path, the campaign history, where to aim, and the rules (mutate
+   HEAD, the source-of-truth clone (`~/Desktop/McGill/email-to-bom-agent`, **`ae4411f`** —
+   NOT `b15b23d`, which is what rounds 25–36 used; read-only), the bar path, the campaign history, where to aim, and the rules (mutate
    only scratch copies; restore and prove the tree clean; build its own adversarial
    inputs; do not re-litigate settled operator decisions).
 4. Ask for two numbers explicitly: **combined mutation survival** and **CaseState
@@ -99,9 +137,15 @@ was wrong. Then:
 Every round's defect has been one of these. Check the fix pass against them before
 declaring anything closed.
 
-1. **Fixing the named instance, missing the sibling** — **seventeen** occurrences.
+1. **Fixing the named instance, missing the sibling** — **eighteen** occurrences.
    Rounds 34→35→36 were the same falsy/branch-gated omission three times running, each
    within a screen of the last. When a finding names one site, grep for the shape.
+   The eighteenth (REQ-096) is the sharpest illustration yet: the invalidation loop was
+   driven by the `ARTIFACTS` declaration *specifically so* nothing could be missed, and
+   one key had been exempted from it **by name**, with a comment justifying the
+   exemption. `.gitignore` had the same shape on the same day. **An enumeration on the
+   unsafe side of a decision is the defect**, however well the surrounding structure is
+   built — look for the exception clause inside the general mechanism.
 2. **A check that has never been able to fail.** Tautologies, coincidence-matches
    (a token that also appears elsewhere on the page), markers placed in the surviving
    prefix of a truncated value, and checks whose fixture never carries the data.
@@ -144,21 +188,31 @@ material. Severity, however, is collapsing — v0.4.0 silently discarded 24 of 3
 RFQs; round 36's blocker was six static column names missing from a section that already
 says "no lines".
 
-**Proposed:** ship when a round produces no finding whose operator-visible consequence is
-a wrong or missing answer to a customer, regardless of PASS/FAIL. Guarantee-level
-findings and coverage gaps get logged and fixed in the next cycle rather than gating
-deployment.
+**Adopted** (this is the stopping rule above, kept here for the reasoning that led to
+it): ship when a round produces no finding whose operator-visible consequence is a wrong
+or missing answer to a customer, regardless of PASS/FAIL. Guarantee-level findings and
+coverage gaps get logged and fixed in the next cycle rather than gating deployment.
 
 Trend for reference — mutation survival: 50%, 65%, 39%, 32%, 25%, 44%*; CaseState
 fidelity: 10/17, 12/17, 13/17, 15/17, 16/17†.
 (* round 36 over-sampled deliberately and said so. † shipped-path.)
 
+Round 37's numbers are not comparable to these without a caveat: the engine changed
+between round 36 and round 37, so a survival figure that moves may be measuring the
+new engine rather than the new checks. Say which when you report it.
+
 ---
 
 ## PUBLISHING
 
-The instance serves **v0.3.0** — no wrapper defences, no inline reply, none of twelve
-rounds of fixes. That is the standing cost of not shipping.
+The instance serves **v0.3.0**. `main` is at **v0.16.0**. The gap is thirteen versions:
+no wrapper defences, no inline reply, no attachment honesty, no run manifest, none of
+twelve rounds of fixes, and the OLD engine — the one that reads a phone number as a
+hose length on real McGill mail. That is the standing cost of not shipping.
+
+**The gate before publishing is round 37**, for the reason at the top of this file: no
+round has tested `ae4411f`. The re-vendor is a materially better engine on real mail,
+which is an argument for shipping it, not for skipping the check.
 
 ```bash
 cd ~/Desktop/McGill/mcgill-email-to-bom && source ~/.zshrc && \
