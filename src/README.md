@@ -106,4 +106,9 @@ drift. Parity with the source is proven by
   run manifest) so the omission is visible, but the content of a drawing or a
   spec sheet is not in the case. The proper fix is an `ATTACHMENT_NOT_READ` open
   item upstream in `McGill-Core`.
+- **Answers given outside the thread need `scripts/apply_answers.py`.** A reviewer
+  who answers in Teams produces text the email never sees, so the next run re-asks.
+  That script appends the answer to the case text as an operator addendum and the
+  engine reads it as a later message — it never writes to the CaseState. Everything
+  downstream then marks which values came from an operator rather than the customer.
 - **One email per run.**

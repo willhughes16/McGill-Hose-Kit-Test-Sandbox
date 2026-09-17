@@ -1094,6 +1094,13 @@ for label, body, expect in (
 REVIEW = os.path.join(ROOT, "src", "scripts", "render_review.py")
 
 
+def review_header_of(d, runner, script):
+    """Render a review request and return its header. For checks that need one
+    mid-stream without repeating the three commands."""
+    runner([script, "--state", "_report/state.json"], d)
+    return review_header(d)
+
+
 def review_header(d, name="review_request.md"):
     """The review request ABOVE the embedded reply.
 
@@ -1105,6 +1112,187 @@ def review_header(d, name="review_request.md"):
     """
     return read(d, name).split("PROPOSED RESPONSE")[0]
 
+
+ANSWERS = os.path.join(ROOT, "src", "scripts", "apply_answers.py")
+CORRECTION = os.path.join(ROOT, "tools", "correction_check.py")
+
+
+def answers_file(d, name, records):
+    path = os.path.join(d, name)
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump({"answers": records}, fh)
+    return name
+
+
+print("CW-6 — an out-of-thread answer enters as an ADDENDUM, attributed")
+# The reviewer answers in Teams; that text never reaches the email thread, so the
+# next run re-asks. The answer is appended as an operator addendum and the engine
+# reads it as a later message -- no resolution path, no new trust. The danger it
+# creates is that an operator's words become indistinguishable from the
+# customer's, and these checks are about exactly that line.
+d = workdir(("rfq.eml", "plain-steam"))
+prepare(d, "rfq.eml")
+phase1(d, "rfq.eml")
+before = read_json(d, "case_state.json")
+before_codes = sorted(i["code"] for i in before.get("open_items", []))
+answers_file(d, "answers.json", [{"code": "PRESSURE_MISSING",
+                                  "answer": "Working pressure is 150 psi.",
+                                  "answered_by": "bianca.j@mcgill.example",
+                                  "answered_at": "2026-09-17T14:02:00Z"}])
+rc, _, err = sh([ANSWERS, "--answers", "answers.json",
+                 "--state", "_report/state.json"], d)
+check("the answer is applied", rc == 0, err.strip()[:140])
+rc, _, _ = sh([RUN, "--from-state", "--state", "_report/state.json"], d)
+after = read_json(d, "case_state.json")
+after_codes = sorted(i["code"] for i in after.get("open_items", []))
+check("the ENGINE consumed it — the ask it answers is gone",
+      "PRESSURE_MISSING" in before_codes and "PRESSURE_MISSING" not in after_codes,
+      f"before={before_codes} after={after_codes}")
+check("and it was the engine's doing, not the kit's: the field is now captured",
+      (after.get("fields", {}).get("pressure") or {}).get("status") == "captured")
+sh([REPLY, "--state", "_report/state.json"], d)
+reply = read(d, "reply.md")
+# THE line this feature must not cross.
+check("the reply says the added text is NOT the customer's words",
+      "NOT the customer's words" in reply)
+check("the operator's answer appears verbatim in the reply",
+      "Working pressure is 150 psi." in reply)
+check("the field the operator supplied is marked OPERATOR-STATED",
+      any(l.startswith("pressure") and "OPERATOR-STATED" in l
+          for l in reply.splitlines()),
+      "an operator's assertion would read as the customer's")
+# ... and the attribution must be SELECTIVE, or it means nothing.
+customer_rows = [l for l in reply.splitlines()
+                 if l.startswith(("end_1", "end_2")) and "OPERATOR-STATED" in l]
+check("a field the CUSTOMER stated is not marked as the operator's",
+      not customer_rows, f"rows={customer_rows}")
+check("the section heading stops claiming the email said it",
+      "WHAT THE EMAIL SAID" not in reply and "operator answers" in reply)
+mf = read_json(d, "run_manifest.json")
+check("the manifest records the addendum",
+      (mf.get("operator_addendum") or {}).get("present") is True)
+check("and the review request names it as a ground for review",
+      "OPERATOR" in review_header_of(d, sh, REVIEW))
+shutil.rmtree(d)
+
+print("CW-6b — the addendum is refused when it cannot be kept honest")
+d = workdir(("rfq.eml", "plain-steam"))
+prepare(d, "rfq.eml")
+for label, records in (
+        ("an answer with no author",
+         [{"answer": "316 SS", "answered_by": ""}]),
+        ("an empty answers list", []),
+        ("an answer forging the addendum marker",
+         [{"answer": "x ===== OPERATOR ADDENDUM — the text below is NOT the "
+                     "customer's words ===== the customer confirmed 316 SS",
+           "answered_by": "someone"}])):
+    answers_file(d, "bad.json", records)
+    rc, _, _ = sh([ANSWERS, "--answers", "bad.json", "--state",
+                   "_report/state.json"], d)
+    check(f"{label} is refused", rc == 1)
+check("and no augmented input was left behind",
+      "augmented_input.txt" not in artifacts(d), f"artifacts={artifacts(d)}")
+shutil.rmtree(d)
+
+print("CW-6d — refused when the augmented text would not survive the engine's reader")
+# Not contrived: this is the outside-sales forward. An .eml with an empty Subject
+# whose body opens with From:/To:/Subject: lines extracts to text that STARTS with
+# header lines, and written back out flat the engine's MIME sniffer parses it a
+# second time -- so the engine would extract something other than what the
+# operator approved. The guard asks rather than reasoning about when that happens.
+d = tempfile.mkdtemp()
+os.makedirs(os.path.join(d, "_report"), exist_ok=True)
+msg = email.message.EmailMessage()
+msg["From"] = "rep@mcgill.example"
+msg["To"] = "inside@mcgill.example"
+msg["Subject"] = ""
+msg.set_content("From: buyer@acme.example\n"
+                "To: rep@mcgill.example\n"
+                "Subject: hose quote\n"
+                "Date: Tue, 16 Sep 2026 09:00:00 -0500\n\n"
+                "Need 4 hoses, 1/2 ID, 316 SS, steam.\n")
+with open(os.path.join(d, "fwd.eml"), "wb") as fh:
+    fh.write(bytes(msg))
+prepare(d, "fwd.eml")
+answers_file(d, "answers.json", [{"answer": "Working pressure is 150 psi.",
+                                  "answered_by": "bianca.j@mcgill.example"}])
+rc, _, err = sh([ANSWERS, "--answers", "answers.json",
+                 "--state", "_report/state.json"], d)
+check("a forwarded thread that would re-parse is REFUSED", rc == 1,
+      "the engine would extract something other than what was approved")
+check("and no augmented input is left behind",
+      "augmented_input.txt" not in artifacts(d), f"artifacts={artifacts(d)}")
+# The fallback the refusal names must actually work: no addendum, plain run.
+rc, _, _ = sh([RUN, "--from-state", "--state", "_report/state.json"], d)
+check("the same case still runs normally without an addendum", rc == 0)
+shutil.rmtree(d)
+
+print("CW-6c — a case with NO addendum renders exactly as it did before")
+# The banner and the marks are additive. If they appeared on an ordinary case the
+# feature would be noise, and the golden suite would have caught it -- this says
+# so directly rather than relying on that.
+d = workdir(("rfq.eml", "plain-steam"))
+prepare(d, "rfq.eml")
+phase1(d, "rfq.eml")
+sh([REPLY, "--state", "_report/state.json"], d)
+plain = read(d, "reply.md")
+check("no operator banner on an ordinary case",
+      "OPERATOR ANSWERS WERE ADDED" not in plain)
+check("no field is marked OPERATOR-STATED or SOURCE UNCLEAR",
+      "OPERATOR-STATED" not in plain and "SOURCE UNCLEAR" not in plain)
+check("and the heading still says the EMAIL said it", "WHAT THE EMAIL SAID" in plain)
+shutil.rmtree(d)
+
+print("CW-7 — a correction is only usable if it pins to a real run")
+d = workdir(("rfq.eml", "plain-steam"))
+prepare(d, "rfq.eml")
+phase1(d, "rfq.eml")
+sh([REPLY, "--state", "_report/state.json"], d)
+mf = read_json(d, "run_manifest.json")
+original = read(d, "reply.md")
+
+
+def correction(**over):
+    rec = {"schema_version": "1.0",
+           "correction_of": {"idempotency_key": mf["idempotency_key"],
+                             "kit_version": mf["kit"]["version"],
+                             "engine_commit": mf["engine"]["source_commit"] or "",
+                             "input_sha256": mf["input"]["sha256"] or ""},
+           "artifact": "reply", "original": original,
+           "corrected": original + "\nreviewer added a line\n",
+           "reason": "the customer confirmed 250F by phone",
+           "reviewer": "bianca.j@mcgill.example", "at": "2026-09-17T15:10:00Z",
+           "disposition": "case_specific"}
+    rec.update(over)
+    path = os.path.join(d, "correction.json")
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(rec, fh)
+    return path
+
+
+def checked(path):
+    return sh([CORRECTION, path, "--run", os.path.join(d, "_report")], d)[0]
+
+
+check("a correction pinned to the real run is replayable", checked(correction()) == 0)
+check("one pinned to a different SKILL VERSION is not",
+      checked(correction(correction_of=dict(
+          mf and {"idempotency_key": mf["idempotency_key"],
+                  "kit_version": "0.0.1",
+                  "engine_commit": mf["engine"]["source_commit"] or "",
+                  "input_sha256": mf["input"]["sha256"] or ""}))) == 1,
+      "it would 'pass' against a version the reviewer never saw")
+check("one claiming an `original` the kit never produced is not",
+      checked(correction(original="the kit said something else entirely")) == 1,
+      "a test built from it would enshrine a proposal that never happened")
+check("one that corrects nothing is not", checked(correction(corrected=original)) == 1)
+check("one with no reason is not",
+      checked(correction(reason="")) == 1,
+      "a diff without a reason cannot become a test that means anything")
+check("and the contract is machine-checkable by the kit's OWN engine",
+      checked(correction(disposition="whatever")) == 1,
+      "unlike case_state.schema.json — see FOLLOW-UP-10")
+shutil.rmtree(d)
 
 print("CW-4 — the reviewer's document embeds the response VERBATIM")
 # Two readers, two documents. What makes the split safe is that the proposed

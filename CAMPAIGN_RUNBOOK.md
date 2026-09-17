@@ -19,8 +19,8 @@ both rollbacks worked.
 
 ## STATE AS OF THIS FILE (2026-09-17 — all work is MERGED to `main`)
 
-`main` carries PR #1 (`dc0a05e`), the runbook refresh, and **v0.18.0**. **`kit.json` and
-the built `dist/kit.zip` are at v0.18.0 and current** — unlike the last two times this
+`main` carries PR #1 (`dc0a05e`), the runbook refresh, and **v0.19.0**. **`kit.json` and
+the built `dist/kit.zip` are at v0.19.0 and current** — unlike the last two times this
 file was written, the artifact is not stale.
 
 What landed since round 36, in order:
@@ -49,6 +49,14 @@ What landed since round 36, in order:
 - **v0.17.0 — REQ-097**: an unread attachment forces `outcome: needs_human_input` on
   its own. The operator's decision on the question v0.16.0 left open. An inline
   signature image does not force it; a scan that did not complete does.
+- **v0.19.0 — REQ-100..103 (CW-6, CW-7)**: `scripts/apply_answers.py` folds a
+  reviewer's out-of-thread answer into the case TEXT as an operator addendum — never
+  into the CaseState — and everything downstream marks which values came from an
+  operator rather than the customer. `schemas/correction.schema.json` plus
+  `tools/correction_check.py` make a reviewer correction replayable or refuse it.
+  **Aim a round here first:** this is the feature the alignment doc flagged as most
+  likely to fail one, and its round-trip guard already survived a mutation run before
+  a fixture was built for it.
 - **v0.18.0 — REQ-098/099 (CW-4, CW-5)**: `scripts/render_review.py` writes
   `_report/review_request.md` — the reviewer's document, with the proposed response
   EMBEDDED VERBATIM so a reviewer approves the exact bytes that would be sent, and
@@ -56,10 +64,11 @@ What landed since round 36, in order:
   empty and renders NOT ROUTABLE rather than guessing. A full run now costs FIVE engine
   passes (extract 1, generate_report 2, render_reply 1, render_review 1).
 
-Suites at v0.18.0: selftest **192/192**, parity 7/7 (zero normalizations), golden 2/2,
+Suites at v0.19.0: selftest **218/218**, parity 7/7 (zero normalizations), golden 2/2,
 completeness 184 combinations / 0 violations, manifest valid.
-Mutation runs on the new work: **29 attempted, 28 caught**; the survivor is the
-defence-in-depth guard noted below.
+Mutation runs on the new work: **41 attempted, 40 caught**; the survivor is the
+defence-in-depth guard noted below. Two of the suite's OWN checks were exposed as
+unable to fail by these runs, and rewritten.
 
 ### Nothing is carried forward as an open finding
 
@@ -69,8 +78,9 @@ clean rather than against a fix pass.
 
 ### Deliberately left unbuilt — do not report as a defect
 
-**`CW-6`…`CW-8` are specified and unbuilt.** See `COWORKER_ALIGNMENT.md`. Their absence
-is not a defect. CW-4 and CW-5 shipped in v0.18.0.
+**`CW-8` (knowledge freshness) is specified and unbuilt**, and belongs upstream in
+`McGill-Core` because `knowledge.py` is vendored. See `COWORKER_ALIGNMENT.md`. Its
+absence is not a defect. CW-1..CW-7 shipped across v0.16.0–v0.19.0.
 
 **One guard is documented as defence-in-depth, not as covered.**
 `render_review.py`'s CaseState reconciliation cannot be isolated by a test — the reply

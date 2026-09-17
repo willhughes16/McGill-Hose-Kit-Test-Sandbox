@@ -131,6 +131,19 @@ order.
   drops `fields`, `routing`, `knowledge` and `supersedes`, and keeps only the code
   and ask from each open item. Anything programmatic must read the JSON — which is why
   the reply states it in words instead of attaching JSON.
+- **An operator's answer is text, not a value.** `scripts/apply_answers.py` folds a
+  reviewer's out-of-thread answer into the case text as an addendum and re-points the
+  invocation at it; the engine treats it as a later message in the thread, which is
+  how it can supersede an earlier value. Nothing writes to the CaseState, so an
+  answer the engine will not accept leaves the ask open — the correct outcome. Every
+  document downstream marks the fields that came from the addendum `OPERATOR-STATED`,
+  and says plainly that the added text is not the customer's words.
+- **A correction has to pin to a run to be worth anything.**
+  `schemas/correction.schema.json` is the shape Body fills in when a reviewer edits a
+  proposal, and `tools/correction_check.py` (kit-side) refuses one that does not match
+  a real run's idempotency key, kit version and engine commit, or whose `original` is
+  not what the run actually produced. A correction that cannot be replayed is an
+  anecdote, not a test.
 - **Two documents, two readers.** `review_request.md` is for the Inside Sales
   reviewer: the decision, the grounds, the owners, and the proposed response
   embedded verbatim. `reply.md` is what gets sent once they approve. The review

@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Reviewer correction",
+  "description": "What a reviewer changed about a proposed response, pinned to the exact run that produced it. Factory turns an APPROVED correction into a test or a proposed skill change; it never alters production behaviour on its own. The kit does not collect corrections - Body does - but the kit defines the shape, because the kit owns what a case is. The pinning in `correction_of` is what makes a correction replayable: a correction that cannot be tied to an input and a skill version cannot become a regression test, only an anecdote.",
+  "type": "object",
+  "required": ["schema_version", "correction_of", "artifact", "original", "corrected", "reason", "reviewer", "at", "disposition"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "correction_of": {
+      "description": "The run this corrects. Every field comes from that run's _report/run_manifest.json and none may be omitted: a correction that does not name the skill version it corrects can be replayed against the wrong one and 'pass'.",
+      "type": "object",
+      "required": ["idempotency_key", "kit_version", "engine_commit", "input_sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "idempotency_key": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "kit_version": {"type": "string"},
+        "engine_commit": {"description": "The manifest's engine.source_commit, or \"\" when that run could not attribute the engine. Empty string rather than null: the kit's own schema engine supports neither union types nor a general oneOf (its oneOf is a hard-coded `source` discriminator for the kit manifest), and a correction contract that the kit cannot machine-check would be a contract in name only. See FOLLOW-UP-10.", "type": "string", "pattern": "^([0-9a-f]{7,40})?$"},
+        "input_sha256": {"description": "The manifest's input.sha256, or \"\" when it could not be read.", "type": "string", "pattern": "^([0-9a-f]{64})?$"}
+      }
+    },
+    "artifact": {
+      "description": "Which document the reviewer was looking at.",
+      "enum": ["reply", "review_request"]
+    },
+    "original": {
+      "description": "The kit's proposal, verbatim. Checked byte-for-byte against what the run actually produced, so a correction cannot claim the kit said something it did not.",
+      "type": "string"
+    },
+    "corrected": {
+      "description": "What the reviewer sent instead, verbatim.",
+      "type": "string"
+    },
+    "reason": {
+      "description": "Why, in the reviewer's words. Required: a diff without a reason is not knowledge, and Factory cannot turn it into a test that means anything.",
+      "type": "string",
+      "minLength": 1
+    },
+    "reviewer": {"type": "string", "minLength": 1},
+    "at": {"type": "string", "minLength": 1},
+    "disposition": {
+      "description": "case_specific - true of this case only, and must NOT become a rule. reusable_knowledge - the reviewer proposes it as company knowledge, which still requires approval before Factory acts on it.",
+      "enum": ["case_specific", "reusable_knowledge"]
+    },
+    "notes": {"type": "string"}
+  }
+}

@@ -48,6 +48,7 @@ for _p in (_VENDOR, _HERE):
         sys.path.insert(0, _p)
 
 from email_to_bom import cli  # noqa: E402  (needs the sys.path lines above)
+import answers as answers_mod  # noqa: E402
 import attachments  # noqa: E402  (kit-side: the engine reads none of them)
 from run_state import (  # noqa: E402
     ARTIFACTS, KIT_NAME, KIT_VERSION, StateError, all_artifacts, artifact_paths,
@@ -124,6 +125,11 @@ def build_manifest(case, invocation, paths, engine_exit, started, elapsed_ms):
     commit, commit_error = engine_commit()
     input_sha = input_sha256(invocation["input"])
     evidence = attachments.scan(invocation["input"])
+    _customer_text, _operator_text = answers_mod.read_case_text(invocation["input"])
+    _operator_addendum = {
+        "present": _operator_text is not None,
+        "lines": answers_mod.addendum_lines(_operator_text),
+    }
     # The outcome reads BOTH grounds: the engine's blocking items and the files
     # the engine could not see (REQ-097). The engine cannot raise an item about
     # an attachment it never opened, so the outcome has to carry it.
@@ -152,6 +158,11 @@ def build_manifest(case, invocation, paths, engine_exit, started, elapsed_ms):
                       if (it or {}).get("priority") == prio)
             for prio in ("blocking", "confirm", "must_acknowledge")},
         "request_class": case.get("request_class"),
+        # Whether an operator's words were folded into the case text (CW-6).
+        # DERIVED from the input the engine actually read, not from the state
+        # record that apply_answers.py wrote: the marker is in that file or it
+        # is not, and a record of it could go stale while the file did not.
+        "operator_addendum": _operator_addendum,
         # What the customer sent that the engine never opened (CW-1). Carried
         # here as well as rendered in the reply so Body can route on it without
         # parsing prose.

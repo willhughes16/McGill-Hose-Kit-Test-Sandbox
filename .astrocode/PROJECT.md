@@ -719,11 +719,71 @@ features are now in:
   unreconciled render says the attachments are UNKNOWN — IS asserted. The docstring
   says all of this, rather than implying a coverage the suite does not have.
 
-Suites at closure: completeness 184/0, selftest **192/192**, parity 7/7, golden 2/2,
-manifest valid. Mutation runs across CW-1..CW-5: **29 attempted, 28 caught**, and the
+- REQ-100 **An out-of-thread answer enters as TEXT, never as a value (CW-6, v0.19.0).**
+  A reviewer answering "it's 316 stainless" in Teams produces text the email thread
+  never sees, so the next run re-asks a question a human already answered.
+  `scripts/apply_answers.py` appends the answer to the case TEXT as an operator
+  addendum and re-points the invocation at it; the engine reads it as a later message
+  in the thread, through the `supersedes` machinery that already carries 529 tests. No
+  resolution path was added, because a second way for a value to enter a case is a
+  second way to be wrong — and if the engine does not accept an answer, the ask stays
+  open, which is the correct outcome. **Mutation-proved:** accepting an author-less
+  answer fails 2 checks, allowing a forged marker fails 2.
+- REQ-101 **An operator's words are never presented as the customer's.** This is the
+  risk CW-6 creates and the reason it needed its own scrutiny. Three things hold the
+  line: everything after the FIRST occurrence of the addendum marker is
+  operator-supplied by definition rather than by parsing; the reply and review request
+  print the addendum verbatim under a banner saying whose words it is, and the reply's
+  section heading stops reading "WHAT THE EMAIL SAID"; and every field is classified
+  by locating its evidence span in each region — `OPERATOR-STATED` only when the span
+  is absent from the customer's text, `SOURCE UNCLEAR` when it is in both, and neither
+  when it cannot be located at all.
+  Two normalisations and only two: whitespace and CASE. The engine lowercases evidence
+  spans, so a case-sensitive test found `male npt` in neither region and marked a
+  field the customer plainly wrote as though its authorship were in doubt. Both folds
+  apply to both sides, so neither can move a span from one author to the other.
+  Span-less fields — most of them — are named once in the banner instead of marked in
+  the table: the first cut marked seven of ten rows `SOURCE UNCLEAR` and buried the
+  one field an operator really did supply. **Mutation-proved:** deleting the banner
+  fails 2, unmarking operator fields fails 1, attributing everything to the customer
+  fails 1, restoring the old heading fails 1.
+- REQ-102 **The addendum is refused when it cannot be kept honest.** Written back out
+  flat, an extracted text that STARTS with header lines re-parses as MIME and the
+  engine would read something other than what the operator approved. That is not
+  hypothetical: an `.eml` with an empty Subject whose body opens with
+  `From:`/`To:`/`Subject:` is the outside-sales forward, and it is the fixture. Rather
+  than reasoning about when it happens, `apply_answers.py` reads its own output back
+  through the engine's reader and refuses on any difference, naming the fallback
+  (paste the answer into the thread) that always works. **Mutation-proved:** the guard
+  survived the first mutation run because no fixture tripped it — the fixture above
+  was built for it, and the guard now fails 2 checks when removed.
+- REQ-103 **A correction must pin to a run to be worth anything (CW-7, v0.19.0).**
+  `schemas/correction.schema.json` is the shape Body fills in when a reviewer edits a
+  proposal: the original and corrected text, the reason, the reviewer, and
+  `correction_of` — the idempotency key, kit version, engine commit and input hash of
+  the run being corrected. `tools/correction_check.py` refuses a correction whose pin
+  does not match a real run manifest, or whose `original` is not byte-for-byte what
+  that run produced. Without the second check a correction can claim the kit said
+  something it never said, and the test built from it would enshrine a defect that
+  never existed — the same shape as the parity fixture that had enshrined the
+  size/length bug. This is the direct answer to *"reviewed corrections may become test
+  cases, but never alter production behaviour automatically."* **Mutation-proved:**
+  each of the four refusals fails its own check.
+- **The schema is deliberately written inside the kit's own validator subset.**
+  `tools/_schema_engine.py` supports neither union types (`["string", "null"]`) nor a
+  general `oneOf` — its `oneOf` is a hard-coded `source` discriminator for the kit
+  manifest and rejects any non-object instance. Both were found by trying. So
+  `correction.schema.json` uses `pattern` and the empty string where null would be
+  natural, and IS machine-checkable by the kit, which `case_state.schema.json` is not
+  (FOLLOW-UP-10). Worth knowing before a fourth schema is written.
+
+Suites at closure: completeness 184/0, selftest **218/218**, parity 7/7, golden 2/2,
+manifest valid. Mutation runs across CW-1..CW-7: **41 attempted, 40 caught**, and the
 one survivor (M19) is the defence-in-depth guard above, proven non-observable and
 documented as such rather than papered over with a check that passes for the wrong
-reason.
+reason. Two of the campaign's own checks were caught by these runs and rewritten: a
+filename test that matched the outcome line four rows above the section it meant to
+assert, and a tampered-CaseState test that the reply guard was satisfying.
 
 The remaining five features (CW-4 review-request artifact, CW-5 resolvable owners,
 CW-6 out-of-band answers, CW-7 correction record, CW-8 knowledge freshness) are

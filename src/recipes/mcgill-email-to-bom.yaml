@@ -52,6 +52,44 @@ phases:
       - _report/state.json
 
   # ─────────────────────────────────────────────────────────────────────
+  # PHASE 0b — Fold in answers given outside the thread (OPTIONAL)
+  # ─────────────────────────────────────────────────────────────────────
+  - name: apply_answers
+    goal: >
+      ONLY when a reviewer has answered something outside the email thread — in
+      Teams, or by phone. Skip this phase entirely otherwise; a run with no
+      out-of-thread answers must not create an addendum.
+
+      Use: python3 scripts/apply_answers.py --answers <file>.json
+           --state _report/state.json
+
+      The answers file is {"answers": [{"answer", "answered_by", "code"?,
+      "answered_at"?}, ...]}. Every answer MUST name its author — an answer whose
+      author is unrecorded cannot later be told from the customer's own words,
+      which is the one thing this must never allow.
+
+      It does NOT answer an open item. It appends the answers to the case TEXT as
+      an operator addendum, writes `_report/augmented_input.txt`, and re-points
+      the recorded invocation at it. The engine then reads the addendum as a later
+      message in the thread. If the engine does not accept an answer, the ask
+      stays open — that is correct, not a failure.
+
+      If it refuses because the augmented text does not survive the engine's own
+      reader, do NOT work around it: paste the answer into the email thread and
+      re-run from phase 0. That path always works.
+    constraints:
+      - "SKIP this phase unless a human answered something outside the thread"
+      - "EVERY answer must carry answered_by — no author, no addendum"
+      - "NEVER edit case_state.json to record an answer — this phase writes TEXT, nothing else"
+      - "NEVER present an operator's answer as the customer's words"
+      - "If the round-trip guard refuses, paste the answer into the thread instead"
+    input:
+      - _report/state.json
+    output:
+      - _report/state.json
+      - _report/augmented_input.txt
+
+  # ─────────────────────────────────────────────────────────────────────
   # PHASE 1 — Extract the case
   # ─────────────────────────────────────────────────────────────────────
   - name: extract_case
@@ -108,6 +146,7 @@ phases:
       - "NEVER invent a part number, price, lead time or stock position"
       - "A field with status `reading` or `assumed` is unconfirmed — say so explicitly"
       - "NEVER open or read an attachment — the engine reads none of them; name them and stop"
+      - "If the manifest reports an operator addendum, say so when you report — those values are not the customer's"
       - "Record intermediate results in _report/ so the run is resumable"
       - "Update state.json when the phase completes"
     input:

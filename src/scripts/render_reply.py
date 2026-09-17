@@ -39,6 +39,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
+import answers as answers_mod  # noqa: E402
 import attachments  # noqa: E402
 from run_engine import run_engine, warn_if_slow  # noqa: E402
 from run_state import (  # noqa: E402
@@ -282,8 +283,47 @@ def _evidence_block(evidence):
     return out
 
 
-def render(case, evidence=None):
-    """Build the reply body. Pure function of the CaseState."""
+def _operator_banner(operator_text, unattributable=()):
+    """The addendum, verbatim, under a banner saying whose words it is.
+
+    Rendered high on the page and BEFORE the field table, because every value
+    below it may have come from here. Each line goes through `_safe`: an operator
+    wrote this text, which makes it no less untrusted as a source of control
+    characters than the customer's.
+    """
+    lines = answers_mod.addendum_lines(operator_text)
+    if not lines:
+        return []
+    out = ["OPERATOR ANSWERS WERE ADDED TO THIS CASE — the text below is NOT the "
+           "customer's words", ""]
+    out += [f"    {_safe(l)}" for l in lines]
+    out += [
+        "",
+        "  The engine read the above as though it were a later message in the "
+        "thread, which",
+        "  is how it can supersede an earlier value. A field marked "
+        "OPERATOR-STATED below came",
+        "  from it, not from the customer. SOURCE UNCLEAR means the same words "
+        "appear in both",
+        "  and the two cannot be told apart. Nothing here has been confirmed BY "
+        "THE CUSTOMER.",
+    ]
+    if unattributable:
+        # Said once, here, rather than as a mark on most rows. These fields carry
+        # no evidence span, so neither region can be checked -- the honest
+        # statement is that they cannot be attributed, not that they are the
+        # customer's.
+        out += ["",
+                "  These fields record no evidence span, so they cannot be "
+                "attributed to either",
+                "  author: " + _safe(", ".join(sorted(unattributable)))]
+    out.append("")
+    return out
+
+
+def render(case, evidence=None, case_text=None):
+    """Build the reply body. Pure function of the CaseState and the case text."""
+    customer_text, operator_text = case_text or ("", None)
     L = []
     # Keys this run actually rendered. Round 34 (H-2) found the previous
     # hand-written `_consumed` list wrong in six places -- each of those keys was
@@ -339,6 +379,15 @@ def render(case, evidence=None):
             L.append(f"  routing (other): {_safe(json.dumps(extra, sort_keys=True))}")
     L.append("")
 
+    # Before the attachments, and before every ask: if an operator's words are in
+    # this case, that colours how each line below should be read.
+    _sourced_all = (answers_mod.operator_fields(case, customer_text, operator_text)
+                    if operator_text is not None else {})
+    L.extend(_operator_banner(
+        operator_text,
+        [n for n, v in _sourced_all.items()
+         if v == answers_mod.UNATTRIBUTABLE]))
+
     # The attachments come FIRST among the sections: an unread drawing changes
     # how every ask below should be read, so a reviewer must meet it before the
     # list of things the engine says are missing.
@@ -367,6 +416,9 @@ def render(case, evidence=None):
     # ---- what the engine understood, with evidence ---------------------------
     take("fields")
     fields = case.get("fields") or {}
+    # Whose words each field came from. Empty when no addendum exists, so the
+    # ordinary case renders exactly as before.
+    sourced = _sourced_all
     if fields:
         rows = []
         long_values = []
@@ -393,12 +445,24 @@ def render(case, evidence=None):
                 # is fine; losing the data is not.
                 long_values.append((name, full))
             mark = "  <-- NOT CONFIRMED" if is_unconfirmed(status) else ""
+            # Only the decidable verdicts get a mark. A span-less field is
+            # listed once in the banner instead: marking most of the table
+            # would bury the field an operator actually supplied, which is the
+            # one thing a reader has to see.
+            if sourced.get(name) == answers_mod.OPERATOR:
+                mark += "  <-- OPERATOR-STATED"
+            elif sourced.get(name) == answers_mod.AMBIGUOUS:
+                mark += "  <-- SOURCE UNCLEAR"
             ev_full = _safe(f.get("evidence"))
             ev = ev_full if len(ev_full) <= 48 else ev_full[:47] + "…"
             if ev != ev_full:
                 long_values.append((f"{name} evidence", ev_full))
             rows.append([_safe(name), value, _safe(status) + mark, ev])
-        L.append("WHAT THE EMAIL SAID")
+        # The heading is a claim about authorship, and it stops being true the
+        # moment an operator answer is folded in.
+        L.append("WHAT THE EMAIL SAID" if operator_text is None
+                 else "WHAT THE CASE TEXT SAID — customer's words AND operator "
+                      "answers")
         L.append("")
         L.append(_table(rows, ["Field", "Value", "Status", "Evidence"]))
         L.append("")
@@ -634,6 +698,10 @@ def main(argv=None):
     evidence = attachments.not_checked(
         "the reply was rendered without reconciliation, so the recorded "
         "invocation is not proven to describe this case")
+    # ("", None) means "no addendum", which is also what an unreconciled render
+    # must assume: it has no proven input to look at, and inventing an operator
+    # banner from an unrelated run's file would be worse than omitting one.
+    case_text = ("", None)
     if args.no_reconcile:
         print("warning: --no-reconcile — the reply is NOT being checked against a "
               "re-derived CaseState", file=sys.stderr)
@@ -667,8 +735,9 @@ def main(argv=None):
         # Reconciled: this invocation provably produced this CaseState, so its
         # input file is provably this case's email.
         evidence = attachments.scan(invocation["input"])
+        case_text = answers_mod.read_case_text(invocation["input"])
 
-    body = render(case, evidence)
+    body = render(case, evidence, case_text)
     try:
         os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
         with open(out, "w", encoding="utf-8") as fh:

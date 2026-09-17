@@ -60,6 +60,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
+import answers as answers_mod  # noqa: E402
 import attachments  # noqa: E402
 import routing as routing_table  # noqa: E402  (not the CaseState's `routing` key)
 import render_reply  # noqa: E402
@@ -73,7 +74,7 @@ from run_state import (  # noqa: E402
 RULE = "-" * 78
 
 
-def _uncertainty(case, evidence):
+def _uncertainty(case, evidence, case_text):
     """The grounds a human is needed, in the order they change the answer.
 
     Derived from the case, never asserted: the same two facts `derive_outcome`
@@ -82,6 +83,7 @@ def _uncertainty(case, evidence):
     relationship rather than the wording of either.
     """
     out = []
+    customer_text, operator_text = case_text or ("", None)
     items = case.get("open_items") or []
     blocking = [i for i in items if (i or {}).get("priority") == "blocking"]
     for item in blocking:
@@ -95,6 +97,15 @@ def _uncertainty(case, evidence):
         out.append("  UNKNOWN   the attachments could not be checked "
                    f"({_safe((evidence or {}).get('error'))}) — it is not known "
                    "whether the customer sent evidence this case does not contain")
+    if operator_text is not None:
+        # Named as a ground in its own right: a reviewer approving a case that an
+        # operator already part-answered is approving that operator's memory too.
+        for line in answers_mod.addendum_lines(operator_text):
+            out.append(f"  OPERATOR  {_safe(line)}")
+        for name, verdict in answers_mod.operator_fields(
+                case, customer_text, operator_text).items():
+            out.append(f"  OPERATOR  {_safe(name)} came from an operator's answer, "
+                       f"not the customer ({_safe(verdict)})")
     for name in sorted(case.get("fields") or {}):
         field = (case.get("fields") or {})[name] or {}
         status = field.get("status")
@@ -104,7 +115,8 @@ def _uncertainty(case, evidence):
     return out
 
 
-def render(case, evidence, reply_body, invocation, addressees, table_error):
+def render(case, evidence, reply_body, invocation, addressees, table_error,
+           case_text=None):
     """Build the review request. Pure function of what it is handed."""
     outcome, reason = derive_outcome(case, evidence)
     key = idempotency_key(invocation, input_sha256(invocation["input"])) \
@@ -145,7 +157,7 @@ def render(case, evidence, reply_body, invocation, addressees, table_error):
     L.append("")
 
     # ---- why a human ---------------------------------------------------------
-    grounds = _uncertainty(case, evidence)
+    grounds = _uncertainty(case, evidence, case_text)
     L.append("WHY THIS NEEDS YOU")
     L.append("")
     if grounds:
@@ -233,6 +245,7 @@ def main(argv=None):
     evidence = attachments.not_checked(
         "the review request was rendered without reconciliation, so the recorded "
         "invocation is not proven to describe this case")
+    case_text = ("", None)
     invocation = normalize_invocation(read_state(args.state).get("invocation"))
     if args.no_reconcile:
         print("warning: --no-reconcile — neither the CaseState nor the embedded "
@@ -258,11 +271,12 @@ def main(argv=None):
                   f"       differing top-level keys: {differing}", file=sys.stderr)
             return 1
         evidence = attachments.scan(invocation["input"])
+        case_text = answers_mod.read_case_text(invocation["input"])
 
         # The embedded reply must be THIS case's reply. Recomputed through the
         # renderer itself rather than compared as prose: a second expression of
         # the reply's content is exactly what this file exists to avoid.
-        expected = render_reply.render(case, evidence)
+        expected = render_reply.render(case, evidence, case_text)
         if expected != reply_body:
             print(f"error: {reply_path} is not the reply for this case.\n"
                   "       A reviewer would approve one text while a different one "
@@ -276,7 +290,8 @@ def main(argv=None):
         print(f"warning: {table_error}; every owner will render as NOT ROUTABLE",
               file=sys.stderr)
 
-    body = render(case, evidence, reply_body, invocation, addressees, table_error)
+    body = render(case, evidence, reply_body, invocation, addressees,
+                  table_error, case_text)
     try:
         os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
         with open(out, "w", encoding="utf-8") as fh:

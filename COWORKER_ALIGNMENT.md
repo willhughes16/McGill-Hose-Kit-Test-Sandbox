@@ -205,7 +205,7 @@ owner with no mapping renders as explicitly *unrouted* rather than defaulting to
 inside sales — a wrong assignee is worse than a visible gap. The kit stays
 offline: it emits the key, Body resolves the address.
 
-### CW-6 — Answers given outside the thread
+### CW-6 — Answers given outside the thread — **SHIPPED v0.19.0**
 
 *Problem.* The reviewer answers "it's 316 stainless" in Teams. That text never
 enters the email thread, so the next run re-asks. The document's Evolution 2
@@ -219,7 +219,20 @@ addendum appended to the case text**, and the engine reads it exactly as it read
 a later message in the thread — the `supersedes` machinery that already exists,
 no new trust, no new code path in the engine.
 
-*The risk to verify, stated up front:* this makes an operator's assertion
+*How the risk was handled, as built.* Everything after the FIRST occurrence of
+the addendum marker is operator-supplied by definition, not by parsing. The reply
+and the review request print the addendum verbatim under a banner naming its
+author, the reply's field table drops the heading "WHAT THE EMAIL SAID", and each
+field is classified by locating its evidence span in each region:
+`OPERATOR-STATED` only when the span is absent from the customer's text,
+`SOURCE UNCLEAR` when it is in both, and neither when it cannot be located. Fields
+with no evidence span are named once in the banner rather than marked in the
+table — marking them all buried the one field that mattered. `apply_answers.py`
+also refuses outright when the augmented text would not survive the engine's own
+reader, which is the outside-sales forward (empty Subject, body opening with
+`From:`/`Subject:` lines).
+
+*The risk as originally stated:* this makes an operator's assertion
 indistinguishable from the customer's in the extracted text. The addendum must
 therefore be attributed in the rendered output (*answered by X, 2026-09-17,
 not by the customer*), and the manifest must record that the input was
@@ -227,7 +240,7 @@ augmented. A reviewer must never read an operator's guess as a customer's
 statement. This is the feature most likely to fail a verification round, and it
 should get one of its own.
 
-### CW-7 — Correction record (`schemas/correction.schema.json`)
+### CW-7 — Correction record (`schemas/correction.schema.json`) — **SHIPPED v0.19.0**
 
 *Problem.* Evolution 3 needs Factory to turn an approved correction into a test
 or a proposed change. Nothing defines what a correction *is*.
@@ -266,7 +279,15 @@ FOLLOW-UP-1 wires the live graph, the document's promise is unmet. Raise against
 
 ## 6. Suggested order
 
-**Status 2026-09-17: CW-1 through CW-5 are shipped.** CW-4 and CW-5 in v0.18.0
+**Status 2026-09-17: CW-1 through CW-7 are shipped.** CW-6 and CW-7 in v0.19.0
+(REQ-100..REQ-103). CW-6's own warning below — that it was the feature most
+likely to fail a verification round — was borne out in miniature: its round-trip
+guard survived the first mutation run because no fixture tripped it, and the
+attribution marking had to be rebuilt after the first cut marked seven of ten
+fields SOURCE UNCLEAR and buried the one an operator actually supplied. Only
+CW-8 (knowledge freshness) remains, and it is upstream work.
+
+**Earlier: CW-1 through CW-5 are shipped.** CW-4 and CW-5 in v0.18.0
 (REQ-098, REQ-099) — 13 further mutations, 12 caught, and the one survivor is a
 defence-in-depth guard documented as non-observable rather than given a check
 that passes for the wrong reason. Remaining: CW-6 (out-of-band answers), CW-7
