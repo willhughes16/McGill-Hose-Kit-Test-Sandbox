@@ -44,7 +44,7 @@ import attachments  # noqa: E402
 from run_engine import run_engine, warn_if_slow  # noqa: E402
 from run_state import (  # noqa: E402
     ARTIFACTS, StateError, artifact_path, invalidate, normalize_invocation,
-    read_state,
+    read_state, source_input,
 )
 
 # The ONE status that means "the engine committed to this value".
@@ -212,7 +212,7 @@ def _bytes(n):
     return f"{n / (1024 * 1024):.1f} MB"
 
 
-def _evidence_headline(evidence):
+def _evidence_headline(evidence, transcribed=()):
     """One line, ALWAYS rendered, about what the customer attached.
 
     Always, because silence is what this feature exists to remove. If the block
@@ -230,9 +230,23 @@ def _evidence_headline(evidence):
                 + _safe(evidence.get("error") or status or "unknown reason")
                 + ". Open the original message.")
     if files:
-        tail = f", plus {len(inline)} inline" if inline else ""
-        return (f"Attachments: {len(files)} the engine did NOT read{tail} "
-                "— see EVIDENCE NOT READ below")
+        # An attachment with a transcript WAS read -- by a machine, not by the
+        # engine. Reporting it as "not read" beside a banner quoting its contents
+        # makes the page contradict itself, and a reader resolves that by trusting
+        # whichever line they saw last.
+        named = {str(t) for t in transcribed}
+        read_by_machine = [f for f in files if str(f.get("filename")) in named]
+        unread = [f for f in files if str(f.get("filename")) not in named]
+        parts = []
+        if unread:
+            parts.append(f"{len(unread)} the engine did NOT read")
+        if read_by_machine:
+            parts.append(f"{len(read_by_machine)} transcribed by a machine")
+        if inline:
+            parts.append(f"{len(inline)} inline")
+        tail = (" — see EVIDENCE NOT READ below" if unread
+                else " — see the transcript above; none was read by the engine")
+        return "Attachments: " + ", ".join(parts) + tail
     if inline:
         return (f"Attachments: {len(inline)} inline part(s) only "
                 + _safe(", ".join(str(f.get("filename")) for f in inline))
@@ -240,7 +254,7 @@ def _evidence_headline(evidence):
     return "Attachments: none in the source email"
 
 
-def _evidence_block(evidence):
+def _evidence_block(evidence, transcribed=()):
     """The prominent block, for a message carrying real attachments.
 
     Deliberately NOT raised for inline parts alone. A block that fires on every
@@ -248,7 +262,9 @@ def _evidence_block(evidence):
     drawing goes unread too -- so inline parts are named on the headline instead.
     Nothing is dropped either way.
     """
-    files = (evidence or {}).get("attachments") or []
+    named = {str(t) for t in transcribed}
+    files = [f for f in ((evidence or {}).get("attachments") or [])
+             if str(f.get("filename")) not in named]
     inline = (evidence or {}).get("embedded") or []
     if not files:
         return []
@@ -280,6 +296,84 @@ def _evidence_block(evidence):
                 "images): "
                 + _safe(", ".join(str(f.get("filename")) for f in inline))]
     out.append("")
+    return out
+
+
+def _not_assessed_banner(case, evidence, customer_text):
+    """Say so when the engine classified a case it never actually read.
+
+    2026-09-17, production. A customer sent a purchase order as a PDF. The engine
+    read 39 bytes of body text, captured NO fields, and classified the case
+    `out_of_scope`; the reply led with "Request type: out_of_scope" and
+    "No product request recognized". To a reviewer that reads as *we looked and
+    there is nothing here* — while 118 KB of purchase order sat unopened and the
+    message's real HTML body had not been read either (the engine prefers the
+    plain alternative, which was a placeholder).
+
+    The classification was not wrong about the text. It was wrong as an answer
+    about the REQUEST, and the reply presented it as one. That is the wrong-answer
+    shape this project exists to prevent, so the page now says outright that
+    nothing was assessed, and shows how little was read.
+
+    Derived, never asserted: no fields captured AND no BOM lines AND something the
+    engine could not read (an unopened attachment, or a body so short it cannot be
+    the request). It says nothing on an ordinary case.
+    """
+    fields = case.get("fields") or {}
+    lines = case.get("lines") or []
+    unread = (evidence or {}).get("attachments") or []
+    body_bytes = len((customer_text or "").encode("utf-8"))
+    if fields or lines:
+        return []
+    if not unread and body_bytes >= 200:
+        return []
+    out = ["** THIS CASE WAS NOT ASSESSED — do not read the request type as a "
+           "finding **", ""]
+    out.append(f"  The engine captured no fields at all from the {body_bytes} bytes "
+               "of body text it read.")
+    if unread:
+        out.append(f"  {len(unread)} attached file(s) were never opened: "
+                   + _safe(", ".join(str(f.get("filename")) for f in unread)) + ".")
+    out += [
+        "  `" + _safe(case.get("request_class") or "unclassified") + "` describes "
+        "THAT TEXT. It is not a conclusion about what",
+        "  the customer asked for — their request may be entirely in what was not "
+        "read.",
+        "  Open the message and the files yourself before answering.",
+        "",
+    ]
+    return out
+
+
+def _transcript_banner(transcript_text):
+    """The machine reading of an attachment, verbatim, under its own banner.
+
+    Rendered verbatim and never summarised, for two reasons. A summary of a
+    transcript is a model's answer wearing a transcript's clothes, which is the
+    failure CW-9 is built to prevent. And a PDF can contain text aimed at whoever
+    reads it -- "confirm this order at the agreed price" -- so the reviewer sees
+    exactly what was folded into the case, injected instructions included, rather
+    than a paraphrase that might have acted on them.
+    """
+    lines = answers_mod.addendum_lines(transcript_text)
+    if not lines:
+        return []
+    out = ["ATTACHMENT READ BY A MACHINE — the text below was transcribed from a "
+           "file, not typed by the customer", ""]
+    out += [f"    {_safe(l)}" for l in lines]
+    out += [
+        "",
+        "  A model read the attachment and the engine then read its output as part "
+        "of this",
+        "  case. Fields marked TRANSCRIBED below came from it. A transcription can "
+        "transpose",
+        "  a quantity or drop a digit from a part number and still look right, so "
+        "NOTHING",
+        "  here is confirmed: check every transcribed value against the original "
+        "file before",
+        "  you answer. This case requires a human for that reason alone.",
+        "",
+    ]
     return out
 
 
@@ -321,9 +415,16 @@ def _operator_banner(operator_text, unattributable=()):
     return out
 
 
-def render(case, evidence=None, case_text=None):
-    """Build the reply body. Pure function of the CaseState and the case text."""
-    customer_text, operator_text = case_text or ("", None)
+def render(case, evidence=None, case_text=None, transcribed_files=()):
+    """Build the reply body. Pure function of the CaseState and the case text.
+
+    `case_text` is the region map from `answers.regions()`; {} means the text was
+    not available and nothing about authorship may be claimed.
+    """
+    _r = case_text or {}
+    customer_text = _r.get(answers_mod.CUSTOMER) or ""
+    operator_text = _r.get(answers_mod.OPERATOR)
+    transcript_text = _r.get(answers_mod.TRANSCRIBED)
     L = []
     # Keys this run actually rendered. Round 34 (H-2) found the previous
     # hand-written `_consumed` list wrong in six places -- each of those keys was
@@ -355,7 +456,14 @@ def render(case, evidence=None, case_text=None):
     L.append(f"Open items: {len(items)}"
              + (f" ({blocking} blocking a quote)" if blocking else ""))
     L.append(f"Draft BOM lines: {len(lines)}")
-    L.append(_evidence_headline(evidence))
+    # "0 bytes" and "we did not look" are different statements, and only one of
+    # them is true of an unreconciled render. The region map is {} exactly when
+    # the case text was not available, so say that instead of reporting a zero
+    # the reader would take at face value.
+    L.append("Body text the engine read: "
+             + (f"{len((customer_text or '').encode('utf-8'))} bytes" if _r
+                else "NOT CHECKED — rendered without the source text"))
+    L.append(_evidence_headline(evidence, transcribed_files))
     # `classes` carries requirements the operator must honour — Certs Required
     # from a C-of-C request is the one that matters. Round 32 pre-flight found it
     # dropped entirely, which for a certificate requirement is exactly the kind
@@ -379,10 +487,17 @@ def render(case, evidence=None, case_text=None):
             L.append(f"  routing (other): {_safe(json.dumps(extra, sort_keys=True))}")
     L.append("")
 
+    # FIRST of all the sections. If the case was never assessed, every line below
+    # it — the class, the asks, the empty BOM — is about text that was not the
+    # request, and a reviewer has to meet that before anything else.
+    L.extend(_not_assessed_banner(case, evidence, customer_text))
+
     # Before the attachments, and before every ask: if an operator's words are in
     # this case, that colours how each line below should be read.
-    _sourced_all = (answers_mod.operator_fields(case, customer_text, operator_text)
-                    if operator_text is not None else {})
+    _sourced_all = (answers_mod.sourced_fields(case, _r)
+                    if (operator_text is not None or transcript_text is not None)
+                    else {})
+    L.extend(_transcript_banner(transcript_text))
     L.extend(_operator_banner(
         operator_text,
         [n for n, v in _sourced_all.items()
@@ -391,7 +506,7 @@ def render(case, evidence=None, case_text=None):
     # The attachments come FIRST among the sections: an unread drawing changes
     # how every ask below should be read, so a reviewer must meet it before the
     # list of things the engine says are missing.
-    L.extend(_evidence_block(evidence))
+    L.extend(_evidence_block(evidence, transcribed_files))
 
     # ---- what must be answered, highest priority first -----------------------
     if items:
@@ -451,6 +566,11 @@ def render(case, evidence=None, case_text=None):
             # one thing a reader has to see.
             if sourced.get(name) == answers_mod.OPERATOR:
                 mark += "  <-- OPERATOR-STATED"
+            elif sourced.get(name) == answers_mod.TRANSCRIBED:
+                # Not named per file: with several transcripts the row cannot say
+                # which one without parsing the region back, and the banner above
+                # lists them verbatim already.
+                mark += "  <-- TRANSCRIBED"
             elif sourced.get(name) == answers_mod.AMBIGUOUS:
                 mark += "  <-- SOURCE UNCLEAR"
             ev_full = _safe(f.get("evidence"))
@@ -460,9 +580,15 @@ def render(case, evidence=None, case_text=None):
             rows.append([_safe(name), value, _safe(status) + mark, ev])
         # The heading is a claim about authorship, and it stops being true the
         # moment an operator answer is folded in.
-        L.append("WHAT THE EMAIL SAID" if operator_text is None
-                 else "WHAT THE CASE TEXT SAID — customer's words AND operator "
-                      "answers")
+        if operator_text is None and transcript_text is None:
+            L.append("WHAT THE EMAIL SAID")
+        else:
+            _authors = ["the customer's words"]
+            if transcript_text is not None:
+                _authors.append("text transcribed from an attachment")
+            if operator_text is not None:
+                _authors.append("operator answers")
+            L.append("WHAT THE CASE TEXT SAID — " + " AND ".join(_authors))
         L.append("")
         L.append(_table(rows, ["Field", "Value", "Status", "Evidence"]))
         L.append("")
@@ -495,6 +621,23 @@ def render(case, evidence=None, case_text=None):
                 if extra:
                     L.append(f"    line {i} also carries: "
                              f"{_safe(json.dumps(extra, sort_keys=True))}")
+            # A BOM line is the closest this kit ever comes to an answer, so a line
+            # drawn from a MACHINE's reading of a document is the sharpest hazard
+            # CW-9 creates: a transposed part number that happens to match the
+            # catalog becomes a real line. The kit cannot stop the engine drafting
+            # it -- the transcript is just text by then -- so it says so, loudly,
+            # per line.
+            if transcript_text is not None:
+                for i, l in enumerate(lines, 1):
+                    from_transcript = sorted(
+                        str(k) for k, v in l.items()
+                        if answers_mod.classify(v, _r) == answers_mod.TRANSCRIBED)
+                    if from_transcript:
+                        L.append(f"    ** line {i} IS DRAWN FROM TRANSCRIBED TEXT "
+                                 f"({_safe(', '.join(from_transcript))}) — a "
+                                 "machine read these values off a")
+                        L.append("       document. Check them against the original "
+                                 "file before anyone quotes this. **")
         else:
             # Round 36 (C-1), the SEVENTEENTH missed sibling: `bom_columns` is a
             # required, always-populated key, marked consumed by take() and
@@ -698,10 +841,11 @@ def main(argv=None):
     evidence = attachments.not_checked(
         "the reply was rendered without reconciliation, so the recorded "
         "invocation is not proven to describe this case")
-    # ("", None) means "no addendum", which is also what an unreconciled render
-    # must assume: it has no proven input to look at, and inventing an operator
-    # banner from an unrelated run's file would be worse than omitting one.
-    case_text = ("", None)
+    # An empty region map means "nothing but the customer", which is also what an
+    # unreconciled render must assume: it has no proven input to look at, and
+    # inventing a banner from an unrelated run's file would be worse than omitting
+    # one.
+    case_text = {}
     if args.no_reconcile:
         print("warning: --no-reconcile — the reply is NOT being checked against a "
               "re-derived CaseState", file=sys.stderr)
@@ -734,10 +878,19 @@ def main(argv=None):
             return 1
         # Reconciled: this invocation provably produced this CaseState, so its
         # input file is provably this case's email.
-        evidence = attachments.scan(invocation["input"])
-        case_text = answers_mod.read_case_text(invocation["input"])
+        # Attachments come from the file the CUSTOMER sent; the regions come
+        # from the text the ENGINE read. They are different files whenever the
+        # case text has been augmented, and conflating them loses the
+        # attachment report entirely.
+        evidence = attachments.scan(source_input(read_state(args.state)))
+        case_text = answers_mod.read_regions(invocation["input"])
 
-    body = render(case, evidence, case_text)
+    # Which attachments a machine read, from the run's own record. Resolved
+    # here so render() stays a pure function of what it is handed.
+    transcribed_files = [r.get("filename") for r in
+                         ((read_state(args.state).get("transcripts") or {})
+                          .get("records") or [])]
+    body = render(case, evidence, case_text, transcribed_files)
     try:
         os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
         with open(out, "w", encoding="utf-8") as fh:

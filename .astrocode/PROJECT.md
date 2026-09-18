@@ -806,7 +806,66 @@ features are now in:
   result: no FAIL lines can mean the check is vacuous OR that the suite never got
   there.
 
-Suites at closure: completeness 184/0, selftest **224/224**, parity 7/7, golden 2/2,
+### v0.21.0 — the production failure of 2026-09-17, and CW-9
+
+A customer sent a purchase order as a PDF. The kit replied `out_of_scope` — "No
+product request recognized". Four defects, three of them introduced the same day:
+
+- REQ-105 **The recipe forced an agent to FABRICATE a kit artifact.** `apply_answers`
+  is optional, but its declared outputs included `_report/augmented_input.txt`, and
+  the harness validates declared outputs — so the phase could never be skipped. With
+  no out-of-thread answers the agent satisfied `CompletePhase` by hand-writing
+  `echo "[no operator addendum...]" > _report/augmented_input.txt`. That file is the
+  case text the engine reads, and CLAUDE.md forbids hand-writing artifacts in as many
+  words. A phase that cannot be skipped is not optional, whatever its goal says. Only
+  `state.json` is declared now.
+- REQ-106 **The slow-input warning measured the file, not the text.** "input is 162 KB"
+  on a message whose body was 39 bytes — the .eml carried a 118 KB base64 PDF the
+  engine never reads. `elapsed_ms` was 13. It now measures the extracted text, which
+  is what runtime scales with.
+- REQ-107 **A classification was presented as a finding about a request nobody read.**
+  The engine captured no fields from 39 bytes of body placeholder and classified
+  `out_of_scope`; the reply led with it. To a reviewer that reads as *we looked and
+  there is nothing here* while 118 KB of purchase order sat unopened. The reply now
+  states the body size on every case, and raises a NOT ASSESSED banner when no field
+  was captured and something went unread. Derived; silent on an ordinary case.
+- REQ-108 **Augmenting the case text lost the attachment report — a live defect in
+  v0.19.0.** CW-6 re-points the invocation at a generated `.txt`, and the attachment
+  scan followed it, so a message carrying an unread drawing reported
+  `Attachments: none in the source email` once an operator answer was applied. The
+  attachment did not stop existing because a reviewer answered a question.
+  `run_state.source_input()` now resolves the file the CUSTOMER sent.
+
+- REQ-109 **CW-9: a machine may TRANSCRIBE an attachment; it may not answer.** The
+  engine reads no file, and the capability to read one exists a layer above the kit —
+  the runtime has a vision-capable host model. So the agent transcribes, and
+  `scripts/apply_transcript.py` folds the transcript into the case text as a THIRD
+  region. The model never extracts, classifies, answers or maps to fields; the engine
+  does all of it, and on the operator's test case the kit went from `out_of_scope`
+  with no fields to `order` with a drafted BOM line.
+  Guards: the file must be one the scanner found in this message (its sha256 is
+  recorded), no marker forgery, the round-trip guard, and a named METHOD — the kit
+  cannot verify a transcript is faithful and cannot verify the method either, but
+  "parsed a CSV" and "looked at a picture of a table" are different claims.
+- REQ-110 **"Proposal only" is enforced everywhere except the CaseState, and that is
+  documented rather than glossed.** `tier` is a knowledge-layer concept;
+  `fields{}` carries a status and no provenance, so a transcribed value reads as
+  `captured` in `case_state.json`. Forking the engine's contract is the one thing this
+  kit never does, so the provenance is a manifest overlay — `transcripts[]` and
+  `transcribed_fields[]` — plus marks in both human documents, an outcome that always
+  demands a human, and a flag on any BOM LINE drawn from transcribed text, which is the
+  sharpest hazard: a transposed part number that happens to match the catalog becomes a
+  real line. **A consumer reading only the CaseState cannot tell a transcribed value
+  from a typed one.** Closing that is upstream work.
+- **Two more of the author's own checks could not fail**, both caught by mutation:
+  a transcript-refusal check that passed when the guard was deleted because the next
+  line raised `KeyError` and the clamp turned it into the same exit code — a refusal
+  must be a DECISION, so the check now also requires the error not to be an unhandled
+  exception; and the `0 bytes` body line on an unreconciled render, which stated as
+  fact something it had not looked at.
+
+Suites at closure: completeness 184/0, selftest **251/251**, parity 7/7, golden 2/2
+(re-captured, diff read: one line added per fixture),
 manifest valid. Mutation runs across CW-1..CW-8: **50 attempted, 49 caught**, and the
 one survivor (M19) is the defence-in-depth guard above, proven non-observable and
 documented as such rather than papered over with a check that passes for the wrong

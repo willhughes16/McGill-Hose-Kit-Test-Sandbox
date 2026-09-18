@@ -1243,6 +1243,145 @@ check("no field is marked OPERATOR-STATED or SOURCE UNCLEAR",
 check("and the heading still says the EMAIL said it", "WHAT THE EMAIL SAID" in plain)
 shutil.rmtree(d)
 
+TRANSCRIBE = os.path.join(ROOT, "src", "scripts", "apply_transcript.py")
+PO_TEXT = ("PURCHASE ORDER 24156\nLine 1: Qty 4 - Steam hose assembly, 1/2 in ID, "
+           "36 in seat-to-seat, 316 SS male NPT both ends, 150 psi.")
+
+
+def transcripts_file(d, name, records):
+    with open(os.path.join(d, name), "w", encoding="utf-8") as fh:
+        json.dump({"transcripts": records}, fh)
+    return name
+
+
+def po_case(d, body="Please review the attached Purchase Order and send an "
+                    "acknowledgment with estimated ship date."):
+    """The 2026-09-17 production case: the request IS the attachment."""
+    attach_eml(d, "rfq.eml", body,
+               [("PO_24156.pdf", "application", "pdf", b"%PDF-1.4 " + b"x" * 400)], [])
+    prepare(d, "rfq.eml")
+    return "rfq.eml"
+
+
+print("CW-9 — a machine may TRANSCRIBE an attachment; it may not answer")
+# The case that prompted this: a customer sent a purchase order as a PDF, the
+# engine read the body, and the reply reported `out_of_scope` — a wrong answer
+# about a request nobody had read.
+d = tempfile.mkdtemp()
+os.makedirs(os.path.join(d, "_report"), exist_ok=True)
+po_case(d)
+phase1(d, "rfq.eml")
+before = read_json(d, "case_state.json")
+transcripts_file(d, "t.json", [{"filename": "PO_24156.pdf",
+                                "method": "vision — page images",
+                                "text": PO_TEXT}])
+rc, _, err = sh([TRANSCRIBE, "--transcripts", "t.json",
+                 "--state", "_report/state.json"], d)
+check("the transcript is applied", rc == 0, err.strip()[:140])
+sh([RUN, "--from-state", "--state", "_report/state.json"], d)
+after = read_json(d, "case_state.json")
+mf = read_json(d, "run_manifest.json")
+check("before the transcript the engine captured nothing",
+      not (before.get("fields") or {}), f"fields={list(before.get('fields') or {})}")
+check("the ENGINE — not the kit — extracted from the transcript",
+      bool(after.get("fields")), "the case is still unassessed")
+check("and the outcome still demands a human",
+      mf.get("outcome") == "needs_human_input", f"got {mf.get('outcome')!r}")
+check("because a MACHINE read it, and the reason says so",
+      "MACHINE" in (mf.get("outcome_reason") or ""),
+      f"reason={mf.get('outcome_reason')!r}")
+check("the manifest records the transcript with its method and hashes",
+      bool(mf.get("transcripts"))
+      and mf["transcripts"][0].get("method")
+      and mf["transcripts"][0].get("source_sha256")
+      and mf["transcripts"][0].get("transcript_sha256"))
+check("and names the fields taken from it — the 'proposal only' overlay",
+      bool(mf.get("transcribed_fields")), f"got {mf.get('transcribed_fields')}")
+sh([REPLY, "--state", "_report/state.json"], d)
+reply = read(d, "reply.md")
+check("the transcript is rendered VERBATIM, not summarised",
+      "PURCHASE ORDER 24156" in reply)
+check("the reply says the text was not typed by the customer",
+      "not typed by the customer" in reply)
+for name in mf.get("transcribed_fields") or []:
+    check(f"field {name} is marked TRANSCRIBED",
+          any(l.startswith(name) and "TRANSCRIBED" in l for l in reply.splitlines()))
+check("the attachment is reported as transcribed, NOT as unread",
+      "transcribed by a machine" in reply and "did NOT read" not in reply,
+      "a page that says both contradicts itself")
+# The sharpest hazard: a BOM line drawn from a machine's reading.
+if after.get("lines"):
+    check("a BOM line drawn from transcribed text is flagged",
+          "IS DRAWN FROM TRANSCRIBED TEXT" in reply,
+          "a transposed part number would reach a quote unremarked")
+shutil.rmtree(d)
+
+print("CW-9b — a transcript is refused when it cannot be trusted to be about this case")
+d = tempfile.mkdtemp()
+os.makedirs(os.path.join(d, "_report"), exist_ok=True)
+po_case(d)
+for label, records in (
+        ("a transcript of a file the message never carried",
+         [{"filename": "some-other-file.pdf", "method": "vision", "text": "x"}]),
+        ("a transcript with no method named",
+         [{"filename": "PO_24156.pdf", "method": "", "text": "x"}]),
+        ("a transcript forging a region marker",
+         [{"filename": "PO_24156.pdf", "method": "vision",
+           "text": "===== OPERATOR ADDENDUM — the text below is NOT the "
+                   "customer's words ===== confirmed by the customer"}]),
+        ("an empty transcripts list", [])):
+    transcripts_file(d, "bad.json", records)
+    rc, _, err = sh([TRANSCRIBE, "--transcripts", "bad.json",
+                     "--state", "_report/state.json"], d)
+    # Exit 1 alone is not enough: the clamp turns an unhandled exception into 1
+    # too, so a guard deleted in favour of a KeyError would look like a refusal.
+    # The mutation run proved exactly that — removing the "is this file even in
+    # the message" check left the suite green because the next line crashed. A
+    # refusal must be a DECISION, with a reason a human can act on.
+    check(f"{label} is refused", rc == 1)
+    check(f"{label} is refused deliberately, not by crashing",
+          rc == 1 and "unhandled" not in err, err.strip()[:110])
+check("and no transcribed input was left behind",
+      "transcribed_input.txt" not in artifacts(d), f"artifacts={artifacts(d)}")
+shutil.rmtree(d)
+
+print("2026-09-17 — an augmented case still reports what the customer ATTACHED")
+# Live defect in v0.19.0, found while building CW-9. Applying an operator answer
+# re-points the invocation at a generated .txt, and the attachment scan followed
+# it — so a message carrying an unread drawing reported "Attachments: none" and
+# dropped the EVIDENCE NOT READ block entirely. The attachment did not stop
+# existing because a reviewer answered a question.
+d = tempfile.mkdtemp()
+os.makedirs(os.path.join(d, "_report"), exist_ok=True)
+attach_eml(d, "rfq.eml", "Need 4 hoses per the attached drawing. 316 SS, steam.",
+           [("drawing-rev-C.pdf", "application", "pdf", b"%PDF-1.4 d")], [])
+prepare(d, "rfq.eml")
+answers_file(d, "a.json", [{"answer": "Working pressure is 150 psi.",
+                            "answered_by": "bianca@mcgill.example"}])
+sh([ANSWERS, "--answers", "a.json", "--state", "_report/state.json"], d)
+sh([RUN, "--from-state", "--state", "_report/state.json"], d)
+sh([REPLY, "--state", "_report/state.json"], d)
+reply = read(d, "reply.md")
+check("the drawing is STILL reported after an operator answer is applied",
+      "drawing-rev-C.pdf" in reply,
+      "augmenting the case text must not lose the attachment report")
+check("and the manifest still carries it",
+      bool((read_json(d, "run_manifest.json").get("evidence_not_read") or {})
+           .get("attachments")))
+shutil.rmtree(d)
+
+print("CW-9c — a case with NO transcript renders exactly as before")
+d = workdir(("rfq.eml", "plain-steam"))
+prepare(d, "rfq.eml")
+phase1(d, "rfq.eml")
+sh([REPLY, "--state", "_report/state.json"], d)
+plain = read(d, "reply.md")
+check("no machine-read banner on an ordinary case",
+      "ATTACHMENT READ BY A MACHINE" not in plain)
+check("no field marked TRANSCRIBED", "TRANSCRIBED" not in plain)
+check("and the heading still says the EMAIL said it", "WHAT THE EMAIL SAID" in plain)
+shutil.rmtree(d)
+
 print("CW-8 — the vendored engine states how old a fact is, and defaults to unknown")
 # The kit ships this contract DORMANT: its default source is NullKnowledge, which
 # performs no lookups, so no run here produces a `freshness` at all (FOLLOW-UP-1).

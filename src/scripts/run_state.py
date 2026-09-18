@@ -59,7 +59,7 @@ INVOCATION_KEYS = ("input", "component_ids", "coc", "config_dir")
 # copy can be: `tools/selftest.py` asserts it equals `kit.json`, so a version
 # bump that forgets this line fails the suite instead of mis-attributing a case.
 KIT_NAME = "mcgill-email-to-bom"
-KIT_VERSION = "0.20.0"
+KIT_VERSION = "0.21.0"
 
 # The outcome vocabulary at the Body/Compute boundary (CW-3).
 #
@@ -79,7 +79,7 @@ OUTCOME_COMPLETE = "complete"
 OUTCOME_NEEDS_HUMAN = "needs_human_input"
 
 
-def derive_outcome(case, evidence=None):
+def derive_outcome(case, evidence=None, transcript=None):
     """(outcome, reason) for a run. Pure, and derived from what the run produced.
 
     `complete` does NOT mean sendable. Every case this kit produces is a draft a
@@ -112,10 +112,27 @@ def derive_outcome(case, evidence=None):
     """
     items = (case or {}).get("open_items") or []
     blocking = [i for i in items if (i or {}).get("priority") == "blocking"]
-    unread = (evidence or {}).get("attachments") or []
+    # A transcribed attachment is not unread. Counting it under both grounds made
+    # the reason contradict itself ("read by a MACHINE ... the engine never read"),
+    # and a reader resolves a contradiction by trusting whichever clause they
+    # finish on.
+    _transcribed = {str(t) for t in (transcript or [])}
+    unread = [f for f in ((evidence or {}).get("attachments") or [])
+              if str(f.get("filename")) not in _transcribed]
     status = (evidence or {}).get("status")
 
     reasons = []
+    if transcript:
+        # THIRD ground (CW-9). A transcribed attachment is no longer unread, and
+        # that is exactly why it needs a human: a model that transposes a quantity
+        # or drops a digit from a part number produces a case that looks complete
+        # and is wrong. Transcription makes a case assessable; it never lowers the
+        # outcome.
+        reasons.append(
+            f"{len(transcript)} attachment(s) were read by a MACHINE, not a "
+            "person: " + ", ".join(str(t) for t in transcript)
+            + ". Every value taken from them is marked TRANSCRIBED and none has "
+            "been confirmed by the customer")
     if blocking:
         codes = sorted({str(i.get("code")) for i in blocking})
         reasons.append(f"{len(blocking)} blocking open item(s): {', '.join(codes)}")
@@ -133,8 +150,9 @@ def derive_outcome(case, evidence=None):
         return OUTCOME_NEEDS_HUMAN, "; ".join(reasons)
     if items:
         return OUTCOME_COMPLETE, (
-            f"{len(items)} open item(s), none blocking a quote; no unread attachments")
-    return OUTCOME_COMPLETE, "no open items; no unread attachments"
+            f"{len(items)} open item(s), none blocking a quote; no unread "
+            "attachments; nothing machine-read")
+    return OUTCOME_COMPLETE, "no open items; no unread attachments; nothing machine-read"
 
 
 def input_sha256(path):
@@ -149,7 +167,7 @@ def input_sha256(path):
     return h.hexdigest()
 
 
-def idempotency_key(invocation, input_sha):
+def idempotency_key(invocation, input_sha, augmentation=None):
     """The identity of a RUN, for recognising a retry. ONE expression of it.
 
     Hashes the input's CONTENT plus the flags, deliberately not the input's path:
@@ -161,11 +179,36 @@ def idempotency_key(invocation, input_sha):
     twice is a key that can be computed differently.
     """
     ident = json.dumps({"input_sha256": input_sha,
+                        "augmentation": sorted(augmentation or []),
                         "component_ids": (invocation or {}).get("component_ids") or [],
                         "coc": bool((invocation or {}).get("coc")),
                         "config_dir": (invocation or {}).get("config_dir")},
                        sort_keys=True)
     return hashlib.sha256(ident.encode("utf-8")).hexdigest()
+
+
+def source_input(state):
+    """The file the CUSTOMER sent, even after the case text has been augmented.
+
+    `invocation["input"]` is the text the ENGINE reads, and CW-6/CW-9 both
+    re-point it at a generated `.txt`. Anything asking a question about the
+    MESSAGE -- above all "what did they attach?" -- has to look at the original,
+    or it gets a confident "none" from a file that never had attachments.
+
+    That was a live defect in v0.19.0, found while building CW-9: applying an
+    operator answer to a message carrying an unread drawing made the reply report
+    `Attachments: none in the source email` and drop the EVIDENCE NOT READ block
+    entirely. The attachment did not stop existing because a reviewer answered a
+    question.
+
+    `transcripts` is consulted before `answers` because transcription runs first,
+    so its record is the one that names the real `.eml`.
+    """
+    for key in ("transcripts", "answers"):
+        recorded = ((state or {}).get(key) or {}).get("original_input")
+        if recorded:
+            return recorded
+    return ((state or {}).get("invocation") or {}).get("input")
 
 
 def engine_commit():

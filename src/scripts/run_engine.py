@@ -48,12 +48,14 @@ for _p in (_VENDOR, _HERE):
         sys.path.insert(0, _p)
 
 from email_to_bom import cli  # noqa: E402  (needs the sys.path lines above)
+from email_to_bom.mail import extract_rfq_text  # noqa: E402
 import answers as answers_mod  # noqa: E402
 import attachments  # noqa: E402  (kit-side: the engine reads none of them)
 from run_state import (  # noqa: E402
     ARTIFACTS, KIT_NAME, KIT_VERSION, StateError, all_artifacts, artifact_paths,
     build_argv, derive_outcome, engine_commit, idempotency_key, input_sha256,
-    invalidate, make_invocation, normalize_invocation, read_state, write_state,
+    invalidate, make_invocation, normalize_invocation, read_state, source_input,
+    write_state,
 )
 
 # Past this size the engine's runtime grows superlinearly, and a kit run makes
@@ -64,8 +66,18 @@ SLOW_INPUT_BYTES = 100 * 1024
 
 
 def warn_if_slow(path, passes):
+    """Warn on inputs whose TEXT is large — not whose file is.
+
+    Measured on the extracted text, because that is what the engine's runtime
+    scales with. A 2026-09-17 production run reported "input is 162 KB" on a
+    message whose body was 39 bytes: the file was an .eml carrying a 118 KB
+    base64 PDF the engine never reads. `elapsed_ms` was 13. A warning that fires
+    on every message with an attachment is noise, and noise is what teaches an
+    operator to skip the warning that matters.
+    """
     try:
-        size = os.path.getsize(path)
+        with open(path, "rb") as fh:
+            size = len(extract_rfq_text(fh.read(), filename=path).encode("utf-8"))
     except OSError:
         return
     if size > SLOW_INPUT_BYTES:
@@ -102,7 +114,8 @@ def run_engine(invocation, as_json=True):
     return buf.getvalue(), engine_exit
 
 
-def build_manifest(case, invocation, paths, engine_exit, started, elapsed_ms):
+def build_manifest(case, invocation, paths, engine_exit, started, elapsed_ms,
+                   state_record=None):
     """The run record: who produced this case, from what, and what it needs.
 
     This is the kit's half of the Body/Compute contract (CW-2/CW-3). Nothing
@@ -123,9 +136,21 @@ def build_manifest(case, invocation, paths, engine_exit, started, elapsed_ms):
     it.
     """
     commit, commit_error = engine_commit()
-    input_sha = input_sha256(invocation["input"])
-    evidence = attachments.scan(invocation["input"])
-    _customer_text, _operator_text = answers_mod.read_case_text(invocation["input"])
+    # TWO inputs, and conflating them was round 37's blocker. `source` is what the
+    # CUSTOMER sent and is the case's identity; `engine_input` is what the engine
+    # actually read, which CW-6 and CW-9 re-point at a generated file. A manifest
+    # that records only the second identifies the kit's own scratch file: the
+    # customer's email appears nowhere, and a CW-7 correction pinned to the run
+    # pins to a temp file.
+    source = source_input(state_record) or invocation["input"]
+    input_sha = input_sha256(source)
+    engine_sha = input_sha256(invocation["input"])
+    evidence = attachments.scan(source_input(state_record))
+    _transcript_records = ((state_record or {}).get("transcripts") or {}).get(
+        "records") or []
+    _regions = answers_mod.read_regions(invocation["input"])
+    _operator_text = _regions.get(answers_mod.OPERATOR)
+    _transcript_text = _regions.get(answers_mod.TRANSCRIBED)
     _operator_addendum = {
         "present": _operator_text is not None,
         "lines": answers_mod.addendum_lines(_operator_text),
@@ -133,9 +158,10 @@ def build_manifest(case, invocation, paths, engine_exit, started, elapsed_ms):
     # The outcome reads BOTH grounds: the engine's blocking items and the files
     # the engine could not see (REQ-097). The engine cannot raise an item about
     # an attachment it never opened, so the outcome has to carry it.
-    outcome, outcome_reason = derive_outcome(case, evidence)
+    _transcript_names = [r.get("filename") for r in _transcript_records]
+    outcome, outcome_reason = derive_outcome(case, evidence, _transcript_names)
     try:
-        size = os.path.getsize(invocation["input"])
+        size = os.path.getsize(source)
     except OSError:
         size = None
     return {
@@ -145,9 +171,19 @@ def build_manifest(case, invocation, paths, engine_exit, started, elapsed_ms):
         "engine": {"source_commit": commit,
                    "source_commit_error": commit_error,
                    "provenance": "vendor/PROVENANCE.md"},
-        "input": {"path": invocation["input"], "sha256": input_sha, "bytes": size},
+        "input": {"path": source, "sha256": input_sha, "bytes": size},
+        # What the engine actually read. Equal to `input` on an ordinary run;
+        # different whenever the case text was augmented, and then the augmenting
+        # record (`answers` / `transcripts`) says by what.
+        "engine_input": {"path": invocation["input"], "sha256": engine_sha},
         "invocation": invocation,
-        "idempotency_key": idempotency_key(invocation, input_sha),
+        # Keyed on the CUSTOMER's email plus the flags plus whatever was folded
+        # into the case text. Two runs of one email with different operator
+        # answers are different cases; the same email under a second name is the
+        # same case.
+        "idempotency_key": idempotency_key(
+            invocation, input_sha,
+            [engine_sha] if engine_sha != input_sha else None),
         "case_state": {"path": paths["case_state"],
                        "schema_version": case.get("schema_version")},
         "engine_exit": engine_exit,
@@ -158,6 +194,16 @@ def build_manifest(case, invocation, paths, engine_exit, started, elapsed_ms):
                       if (it or {}).get("priority") == prio)
             for prio in ("blocking", "confirm", "must_acknowledge")},
         "request_class": case.get("request_class"),
+        # CW-9: which attachments a MACHINE read, how, and which fields came
+        # from them. This overlay is where "proposal only" lives: `fields{}` in
+        # the CaseState carries a status and no provenance, so a transcribed
+        # value reads as `captured` there. The CaseState is the engine's verbatim
+        # contract and is never forked -- the provenance sits beside it, here.
+        "transcripts": _transcript_records,
+        "transcribed_fields": sorted(
+            name for name, verdict in answers_mod.sourced_fields(
+                case, _regions).items()
+            if verdict == answers_mod.TRANSCRIBED),
         # Whether an operator's words were folded into the case text (CW-6).
         # DERIVED from the input the engine actually read, not from the state
         # record that apply_answers.py wrote: the marker is in that file or it
@@ -344,7 +390,7 @@ def main(argv=None):
     # produced a CaseState: absence is the failure signal, and a half-written
     # record can never claim a case that was not extracted.
     manifest = build_manifest(case, invocation, paths, engine_exit, started,
-                              elapsed_ms)
+                              elapsed_ms, read_state(args.state))
     try:
         os.makedirs(os.path.dirname(os.path.abspath(paths["manifest"])),
                     exist_ok=True)

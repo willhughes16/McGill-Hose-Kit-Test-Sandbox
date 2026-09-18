@@ -92,6 +92,19 @@ line:
   the run manifest) and stops there. Reading one yourself would put case data
   into the answer from outside the engine, with none of its guarantees, and every
   open item below it was derived without that file. Tell the operator to open it.
+- **Never let a model answer; it may only transcribe.** `apply_transcript.py`
+  folds a machine's reading of an attachment into the case TEXT, and the engine
+  extracts from it as it would from any text. A summary is an answer wearing a
+  transcript's clothes — transcribe or skip.
+- **Never present a transcribed value as confirmed.** Every one is marked
+  `TRANSCRIBED`, the outcome always requires a human, and a BOM line drawn from a
+  transcript is flagged. A model can transpose a quantity or drop a digit from a
+  part number and still look right.
+- **`case_state.json` does NOT carry this provenance.** `fields{}` has a status and
+  nothing else, so a transcribed value reads as `captured` there. The list of
+  transcribed fields is in `_report/run_manifest.json` beside it. A consumer
+  reading only the CaseState cannot tell a transcribed value from a typed one —
+  say so to anyone integrating against it.
 - **Never answer an open item with `apply_answers.py`.** It does not answer
   anything. It appends a reviewer's out-of-thread answer to the case TEXT as an
   operator addendum, and the engine reads it as a later message in the thread. If
@@ -128,6 +141,7 @@ line:
 | `_report/case_state.json` | The machine contract a conversation layer consumes. Conforms to `schemas/case_state.schema.json`. **Not attached** — cite it, do not send it. |
 | `_report/bom_draft.md` | The engine's own verbatim rendering, byte-identical to what the source engine prints. A **lossy** view kept for parity, not for sending. |
 | `_report/review_request.md` | **What the REVIEWER reads.** The decision being asked for (approve / edit / reject / reassign / escalate), the outcome and its grounds, who the case routes to with each owner resolved through `config/routing.json`, and the proposed response **embedded verbatim**. Send this to the reviewer; send `reply.md` only once they approve. |
+| `_report/transcribed_input.txt` | Present ONLY when an attachment was transcribed (`scripts/apply_transcript.py`). The case text plus a machine's reading of a file the customer sent. An **input**, not an output. |
 | `_report/augmented_input.txt` | Present ONLY when a reviewer's out-of-thread answer was folded in (`scripts/apply_answers.py`). It is the case text the engine read: the customer's words plus an operator addendum. An **input**, not an output — the extract phase does not clear it. |
 | `_report/run_manifest.json` | **The run record** a conversation layer reads: which kit version and which engine commit produced this case, the input's sha256 and an `idempotency_key` derived from it, the `outcome` (`complete` / `needs_human_input`), and `evidence_not_read` — the files the customer attached that the engine never opened. Written by the extract phase. |
 | `_report/state.json` | The run's `invocation` record (written by prepare, read by the later phases) plus the extract result. Not a deliverable. |

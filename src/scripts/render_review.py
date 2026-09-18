@@ -20,18 +20,21 @@ Three guards, each failing CLOSED:
    script that trusts the file on disk will happily write a confident document
    about a case the engine no longer produces.
 
-   Stated honestly, because a claim the suite cannot back is this campaign's
-   fourth failure shape: for CONTENT divergence this guard is **defence in
-   depth**, not an independently observable behaviour. Deleting it does not change
-   what this script accepts, because guard 2 refuses the same pairs -- a tampered
-   CaseState makes the on-disk reply wrong for it, and a reply forged to match the
-   tampered case cannot carry a scanned attachment record, since REQ-093 only lets
-   a RECONCILED render scan the input. The mutation run demonstrated exactly that:
-   removing this check failed nothing, and the two attempts to write a check that
-   isolates it both ended up exercising guard 2. What IS observable, and is
-   asserted, is the scan authorisation: without reconciliation the review request
-   says the attachments were NOT CHECKED. The guard stays because the coincidence
-   that makes it redundant is a property of today's renderer, not a contract.
+   **This docstring used to claim the guard could not be isolated by a test.
+   Round 37 refuted that, and the claim was wrong.** The author had written that
+   guard 2 refuses the same pairs, because a reply forged to match a tampered
+   CaseState could not carry a scanned attachment record. It can: render the
+   forged reply through `render_reply.render` with the REAL evidence and case
+   text, and guard 2 is satisfied. The verifier built that pair, confirmed the
+   shipped script refuses it, removed this guard in a scratch copy and watched the
+   forged pair be accepted — with a `DERATING_REVIEW` blocking item silently
+   absent from the reviewer's document.
+
+   So this guard is load-bearing on its own, the test that isolates it exists,
+   and the previous paragraph was false documentation of exactly the kind twelve
+   rounds have found in shipped docs. It is left here, corrected, rather than
+   deleted: what the author could not find a test for, someone else found in an
+   afternoon.
 2. **`reply.md` must equal what the renderer produces for THIS case right now.**
    A stale reply beside a fresh CaseState would mean the reviewer approves one
    text while a different one is on disk to send. Rather than comparing prose,
@@ -68,13 +71,13 @@ from render_reply import _safe, is_unconfirmed  # noqa: E402
 from run_engine import run_engine, warn_if_slow  # noqa: E402
 from run_state import (  # noqa: E402
     ARTIFACTS, StateError, artifact_path, derive_outcome, idempotency_key,
-    input_sha256, invalidate, normalize_invocation, read_state,
+    input_sha256, invalidate, normalize_invocation, read_state, source_input,
 )
 
 RULE = "-" * 78
 
 
-def _uncertainty(case, evidence, case_text):
+def _uncertainty(case, evidence, case_text, transcribed=()):
     """The grounds a human is needed, in the order they change the answer.
 
     Derived from the case, never asserted: the same two facts `derive_outcome`
@@ -83,13 +86,21 @@ def _uncertainty(case, evidence, case_text):
     relationship rather than the wording of either.
     """
     out = []
-    customer_text, operator_text = case_text or ("", None)
+    _r = case_text or {}
+    customer_text = _r.get(answers_mod.CUSTOMER) or ""
+    operator_text = _r.get(answers_mod.OPERATOR)
+    transcript_text = _r.get(answers_mod.TRANSCRIBED)
     items = case.get("open_items") or []
     blocking = [i for i in items if (i or {}).get("priority") == "blocking"]
     for item in blocking:
         out.append(f"  BLOCKING  [{_safe(item.get('code'))}] "
                    f"{_safe(item.get('ask') or item.get('quote'))}")
-    for f in (evidence or {}).get("attachments") or []:
+    # A transcribed attachment is NOT unread — it gets a MACHINE line below.
+    # Listing it under both makes the page contradict itself, and a reviewer
+    # resolves a contradiction by trusting whichever line they read last.
+    _named = {str(t) for t in transcribed}
+    for f in [f for f in ((evidence or {}).get("attachments") or [])
+              if str(f.get("filename")) not in _named]:
         out.append(f"  UNREAD    {_safe(f.get('filename'))} — the customer sent it, "
                    "the engine never opened it, and every item below was derived "
                    "without it")
@@ -97,15 +108,36 @@ def _uncertainty(case, evidence, case_text):
         out.append("  UNKNOWN   the attachments could not be checked "
                    f"({_safe((evidence or {}).get('error'))}) — it is not known "
                    "whether the customer sent evidence this case does not contain")
+    if transcript_text is not None:
+        # A reviewer approving a case built on a transcript is approving a
+        # machine's reading of a document, and that is a ground in its own right.
+        for line in answers_mod.addendum_lines(transcript_text):
+            out.append(f"  MACHINE   {_safe(line)}")
+        for name, verdict in answers_mod.sourced_fields(case, _r).items():
+            if verdict == answers_mod.TRANSCRIBED:
+                out.append(f"  MACHINE   {_safe(name)} was read off an attachment "
+                           "by a model, not typed by the customer")
     if operator_text is not None:
         # Named as a ground in its own right: a reviewer approving a case that an
         # operator already part-answered is approving that operator's memory too.
         for line in answers_mod.addendum_lines(operator_text):
             out.append(f"  OPERATOR  {_safe(line)}")
-        for name, verdict in answers_mod.operator_fields(
-                case, customer_text, operator_text).items():
-            out.append(f"  OPERATOR  {_safe(name)} came from an operator's answer, "
-                       f"not the customer ({_safe(verdict)})")
+        # Round 37 (H-1): this claimed "came from an operator's answer, not the
+        # customer" for EVERY non-customer verdict — including `ambiguous` (the
+        # words are in both) and `unattributable` (no evidence span to check).
+        # Three of five such lines were false in one run, and a reviewer reading
+        # them would discount values the customer really did state. Each verdict
+        # now says what it actually means.
+        _said = {answers_mod.OPERATOR:
+                 "came from an operator's answer, not the customer",
+                 answers_mod.AMBIGUOUS:
+                 "appears in BOTH the customer's text and an operator's — the two "
+                 "cannot be told apart here",
+                 answers_mod.UNATTRIBUTABLE:
+                 "records no evidence span, so it cannot be attributed to either"}
+        for name, verdict in answers_mod.sourced_fields(case, _r).items():
+            if verdict in _said:
+                out.append(f"  OPERATOR  {_safe(name)} {_said[verdict]}")
     for name in sorted(case.get("fields") or {}):
         field = (case.get("fields") or {})[name] or {}
         status = field.get("status")
@@ -116,9 +148,11 @@ def _uncertainty(case, evidence, case_text):
 
 
 def render(case, evidence, reply_body, invocation, addressees, table_error,
-           case_text=None):
+           case_text=None, transcripts=None):
     """Build the review request. Pure function of what it is handed."""
-    outcome, reason = derive_outcome(case, evidence)
+    outcome, reason = derive_outcome(
+        case, evidence,
+        [r.get('filename') for r in transcripts or []])
     key = idempotency_key(invocation, input_sha256(invocation["input"])) \
         if invocation else None
 
@@ -157,7 +191,8 @@ def render(case, evidence, reply_body, invocation, addressees, table_error,
     L.append("")
 
     # ---- why a human ---------------------------------------------------------
-    grounds = _uncertainty(case, evidence, case_text)
+    grounds = _uncertainty(case, evidence, case_text,
+                           [r.get('filename') for r in transcripts or []])
     L.append("WHY THIS NEEDS YOU")
     L.append("")
     if grounds:
@@ -245,7 +280,7 @@ def main(argv=None):
     evidence = attachments.not_checked(
         "the review request was rendered without reconciliation, so the recorded "
         "invocation is not proven to describe this case")
-    case_text = ("", None)
+    case_text = {}
     invocation = normalize_invocation(read_state(args.state).get("invocation"))
     if args.no_reconcile:
         print("warning: --no-reconcile — neither the CaseState nor the embedded "
@@ -270,13 +305,16 @@ def main(argv=None):
                   "about a different case. Refusing.\n"
                   f"       differing top-level keys: {differing}", file=sys.stderr)
             return 1
-        evidence = attachments.scan(invocation["input"])
-        case_text = answers_mod.read_case_text(invocation["input"])
+        evidence = attachments.scan(source_input(read_state(args.state)))
+        case_text = answers_mod.read_regions(invocation["input"])
 
         # The embedded reply must be THIS case's reply. Recomputed through the
         # renderer itself rather than compared as prose: a second expression of
         # the reply's content is exactly what this file exists to avoid.
-        expected = render_reply.render(case, evidence, case_text)
+        expected = render_reply.render(case, evidence, case_text,
+                                       [r.get("filename") for r in
+                                        ((read_state(args.state).get("transcripts")
+                                          or {}).get("records") or [])])
         if expected != reply_body:
             print(f"error: {reply_path} is not the reply for this case.\n"
                   "       A reviewer would approve one text while a different one "
@@ -291,7 +329,8 @@ def main(argv=None):
               file=sys.stderr)
 
     body = render(case, evidence, reply_body, invocation, addressees,
-                  table_error, case_text)
+                  table_error, case_text,
+                  (read_state(args.state).get('transcripts') or {}).get('records'))
     try:
         os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
         with open(out, "w", encoding="utf-8") as fh:

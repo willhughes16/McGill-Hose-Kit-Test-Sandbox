@@ -51,8 +51,20 @@ from email_to_bom.mail import extract_rfq_text  # noqa: E402
 MARKER = ("===== OPERATOR ADDENDUM — the text below is NOT the customer's words "
           "=====")
 
+# CW-9. A THIRD author: not the customer's typing, not an operator's memory, but a
+# machine's reading of a document the customer attached. It is their content and not
+# their words, so it needs its own region and its own label.
+#
+# Ordering in the case text is customer -> transcript -> operator, and it is
+# chronological on purpose: the attachment arrived WITH the email, an out-of-thread
+# answer came after it, and `supersedes` is order-dependent — a later correction
+# overrides an earlier value.
+TRANSCRIPT_MARKER = ("===== ATTACHMENT TRANSCRIPT — machine-read from a file the "
+                     "customer attached, NOT typed by them =====")
+
 CUSTOMER = "customer"
 OPERATOR = "operator"
+TRANSCRIBED = "transcribed"
 AMBIGUOUS = "ambiguous"
 # A field the engine captured without recording a span it came from. Neither
 # region can be checked, so it is not ambiguous between two readings -- it is
@@ -113,17 +125,37 @@ def build_addendum(records):
     return "\n".join(lines).rstrip() + "\n"
 
 
-def split(text):
-    """(customer_text, operator_text | None) for a case's extracted text.
+def regions(text):
+    """The case text split by author: {customer, transcript, operator}.
 
-    By definition, not by parsing: everything before the FIRST marker is the
-    customer's, everything after it is not.
+    By definition, not by parsing. Each marker's FIRST occurrence opens its region;
+    a marker pasted into someone's own text therefore buys nothing, because the
+    boundary is already fixed by the first one.
+
+    `transcript` and `operator` are None when their marker is absent, and a text
+    with neither is entirely the customer's — which is the ordinary case and must
+    stay indistinguishable from today's behaviour.
     """
     text = text or ""
-    if MARKER not in text:
-        return text, None
-    head, _, tail = text.partition(MARKER)
-    return head, tail
+    marks = [(text.find(TRANSCRIPT_MARKER), TRANSCRIBED),
+             (text.find(MARKER), OPERATOR)]
+    present = sorted((i, name) for i, name in marks if i >= 0)
+    out = {CUSTOMER: text, TRANSCRIBED: None, OPERATOR: None}
+    if not present:
+        return out
+    out[CUSTOMER] = text[:present[0][0]]
+    for n, (start, name) in enumerate(present):
+        end = present[n + 1][0] if n + 1 < len(present) else len(text)
+        marker = TRANSCRIPT_MARKER if name == TRANSCRIBED else MARKER
+        out[name] = text[start + len(marker):end]
+    return out
+
+
+def split(text):
+    """(customer_text, operator_text | None). Kept for callers that only care
+    whether an OPERATOR addendum is present; new code uses regions()."""
+    r = regions(text)
+    return r[CUSTOMER], r[OPERATOR]
 
 
 def read_case_text(path):
@@ -143,8 +175,18 @@ def read_case_text(path):
     return split(extract_rfq_text(raw, filename=path))
 
 
+def read_regions(path):
+    """The case text the engine read, split by author. See regions()."""
+    try:
+        with open(path, "rb") as fh:
+            raw = fh.read()
+    except OSError:
+        return {CUSTOMER: "", TRANSCRIBED: None, OPERATOR: None}
+    return regions(extract_rfq_text(raw, filename=path))
+
+
 def addendum_lines(operator_text):
-    """The addendum as a list of lines, for rendering verbatim."""
+    """A region as a list of lines, for rendering verbatim."""
     return [l for l in (operator_text or "").splitlines() if l.strip()]
 
 
@@ -166,36 +208,34 @@ def _norm(value):
     return " ".join(str(value or "").casefold().split())
 
 
-def classify(evidence, customer_text, operator_text):
-    """Whose words a piece of evidence is: customer, operator, or ambiguous.
+def classify(evidence, region_map):
+    """Whose words a piece of evidence is. Sound in the direction that matters.
 
-    Sound in the direction that matters. `operator` is returned only when the
-    span is absent from the customer's text, and `customer` only when it is
-    absent from the operator's; anything present in both is `ambiguous`, never
-    attributed to the customer by default.
+    A verdict other than `customer` is returned only when the span is ABSENT from
+    the customer's text, and `customer` only when it is absent from every other
+    region. A span found in more than one is `ambiguous`; one found in none is
+    `unattributable`, which is not the same thing and must not be reported as it —
+    see the comments on those constants.
+
+    Generalised from two regions to N for CW-9. The two-region case behaves
+    exactly as before, which the suite asserts.
     """
+    region_map = region_map or {}
+    others = {k: v for k, v in region_map.items()
+              if k != CUSTOMER and v is not None}
+    if not others:
+        return CUSTOMER          # no addendum, no transcript: all the customer's
     span = _norm(evidence)
-    if operator_text is None:
-        return CUSTOMER          # no addendum: every word is the customer's
     if not span:
         return UNATTRIBUTABLE
-    in_customer = span in _norm(customer_text)
-    in_operator = span in _norm(operator_text)
-    if in_operator and not in_customer:
-        return OPERATOR
-    if in_customer and not in_operator:
-        return CUSTOMER
-    if not in_customer and not in_operator:
-        # The span is in neither region: the engine reformatted it beyond a
-        # whitespace-and-case fold, so it cannot be located. That is not the same
-        # as appearing in both, and calling it AMBIGUOUS would tell a reader the
-        # same words occur in both authors' text when nothing of the sort was
-        # established.
-        return UNATTRIBUTABLE
-    return AMBIGUOUS
+    found = [k for k, v in list(others.items()) + [(CUSTOMER, region_map.get(CUSTOMER))]
+             if v is not None and span in _norm(v)]
+    if len(found) == 1:
+        return found[0]
+    return AMBIGUOUS if found else UNATTRIBUTABLE
 
 
-def operator_fields(case, customer_text, operator_text):
+def sourced_fields(case, region_map):
     """{field name: verdict} for every field whose evidence is not the customer's.
 
     Only the fields worth flagging are returned -- `customer` verdicts are left
@@ -204,8 +244,7 @@ def operator_fields(case, customer_text, operator_text):
     """
     out = {}
     for name, field in sorted((case.get("fields") or {}).items()):
-        verdict = classify((field or {}).get("evidence"), customer_text,
-                           operator_text)
+        verdict = classify((field or {}).get("evidence"), region_map)
         if verdict != CUSTOMER:
             out[name] = verdict
     return out

@@ -279,7 +279,13 @@ FOLLOW-UP-1 wires the live graph, the document's promise is unmet. Raise against
 
 ## 6. Suggested order
 
-**Status 2026-09-17: ALL EIGHT are shipped.** CW-8 in v0.20.0 (REQ-104) — built
+**Status 2026-09-17: all eight, plus CW-9.** CW-9 (REQ-109/110) was added after a
+production failure the eight did not cover: the request was the attachment, and
+the kit's honest "the engine opened none of them" was useless. A machine may now
+TRANSCRIBE an attachment — never extract, classify or answer — and the engine
+reads the transcript as a third authored region. 10 mutations, 10 caught.
+
+**Earlier: ALL EIGHT are shipped.** CW-8 in v0.20.0 (REQ-104) — built
 upstream in `ScaleUpLabs/McGill-Core` (`6b0a897`) because `knowledge.py` is
 vendored, then re-vendored with parity staying 7/7 byte-identical. It ships
 DORMANT: the kit's default knowledge source performs no lookups, so nothing in a

@@ -106,6 +106,12 @@ drift. Parity with the source is proven by
   run manifest) so the omission is visible, but the content of a drawing or a
   spec sheet is not in the case. The proper fix is an `ATTACHMENT_NOT_READ` open
   item upstream in `McGill-Core`.
+- **Attachments can be transcribed, never interpreted.** The engine reads no file.
+  `scripts/apply_transcript.py` folds a machine's reading of one into the case text,
+  so a request that lives in a PDF becomes assessable — and every value taken from it
+  is marked `TRANSCRIBED`, the outcome always requires a human, and a BOM line drawn
+  from a transcript is flagged. `case_state.json` still reports such a value as
+  `captured`; the provenance is in `run_manifest.json` beside it.
 - **Answers given outside the thread need `scripts/apply_answers.py`.** A reviewer
   who answers in Teams produces text the email never sees, so the next run re-asks.
   That script appends the answer to the case text as an operator addendum and the

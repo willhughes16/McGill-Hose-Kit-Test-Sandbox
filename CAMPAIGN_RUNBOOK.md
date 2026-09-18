@@ -51,6 +51,12 @@ What landed since round 36, in order:
 - **v0.17.0 — REQ-097**: an unread attachment forces `outcome: needs_human_input` on
   its own. The operator's decision on the question v0.16.0 left open. An inline
   signature image does not force it; a scan that did not complete does.
+- **v0.21.0 — REQ-105..110**: four defects from a real production run (a PO sent as a
+  PDF), three of them introduced the same day — including a recipe phase that forced an
+  agent to hand-write a kit artifact, and a v0.19.0 defect where augmenting the case
+  text LOST the attachment report. Plus CW-9: a machine may transcribe an attachment
+  into a third authored region; it may not answer. **Aim a round at CW-9 and at
+  `source_input()`** — both are new on the shipped path.
 - **v0.20.0 — REQ-104 (CW-8)**: the engine was re-vendored again, at `6b0a897`, for
   knowledge freshness. **Parity stayed 7/7 byte-identical**, so unlike the `ae4411f`
   re-vendor this one provably does not change the kit's output — only `knowledge.py`
@@ -70,7 +76,7 @@ What landed since round 36, in order:
   empty and renders NOT ROUTABLE rather than guessing. A full run now costs FIVE engine
   passes (extract 1, generate_report 2, render_reply 1, render_review 1).
 
-Suites at v0.20.0: selftest **224/224**, parity 7/7 (zero normalizations), golden 2/2,
+Suites at v0.21.0: selftest **251/251**, parity 7/7 (zero normalizations), golden 2/2,
 completeness 184 combinations / 0 violations, manifest valid.
 Mutation runs on the new work: **50 attempted, 49 caught**; the survivor is the
 defence-in-depth guard noted below. Two of the suite's OWN checks were exposed as

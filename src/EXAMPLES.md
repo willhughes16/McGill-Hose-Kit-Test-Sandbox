@@ -131,6 +131,12 @@ order.
   drops `fields`, `routing`, `knowledge` and `supersedes`, and keeps only the code
   and ask from each open item. Anything programmatic must read the JSON — which is why
   the reply states it in words instead of attaching JSON.
+- **A model may transcribe an attachment; it may not answer.** When the request is
+  the attachment — a PO as a PDF — `scripts/apply_transcript.py` folds a transcription
+  into the case text and the ENGINE extracts from it as it would from any text. The
+  model never classifies, never maps to fields and never decides what matters. Every
+  transcribed value is marked, and the outcome is always `needs_human_input`: a
+  transcription can transpose a quantity and still look right.
 - **An operator's answer is text, not a value.** `scripts/apply_answers.py` folds a
   reviewer's out-of-thread answer into the case text as an addendum and re-points the
   invocation at it; the engine treats it as a later message in the thread, which is

@@ -32,6 +32,7 @@ message it could not actually read.
 """
 from __future__ import annotations
 
+import hashlib
 import os
 from email import policy
 from email.parser import BytesParser
@@ -48,13 +49,29 @@ from email.parser import BytesParser
 _BODY_SUBTYPES = frozenset({"plain", "html"})
 
 
-def _size(part):
-    """Decoded byte count, or None when the part will not decode."""
+def _payload(part):
+    """Decoded bytes, or None when the part will not decode."""
     try:
-        payload = part.get_payload(decode=True)
+        return part.get_payload(decode=True)
     except Exception:             # noqa: BLE001 - a malformed part must not raise
         return None
+
+
+def _size(part):
+    """Decoded byte count, or None when the part will not decode."""
+    payload = _payload(part)
     return len(payload) if payload is not None else None
+
+
+def _sha256(part):
+    """Hash of the attachment's own bytes, or None.
+
+    Added for CW-9: a transcript names the file it claims to describe, and this is
+    what pins that claim to the actual bytes the customer sent. Also lets a
+    consumer recognise the same attachment across two messages.
+    """
+    payload = _payload(part)
+    return hashlib.sha256(payload).hexdigest() if payload is not None else None
 
 
 def _classify(part):
@@ -81,7 +98,8 @@ def _classify(part):
     record = {"filename": filename or "(unnamed)",
               "content_type": content_type,
               "disposition": disposition or "(none)",
-              "bytes": _size(part)}
+              "bytes": _size(part),
+              "sha256": _sha256(part)}
     if disposition == "attachment":
         return "attachments", record
     if content_id:
