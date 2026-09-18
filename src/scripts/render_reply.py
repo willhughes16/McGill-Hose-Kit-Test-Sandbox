@@ -41,6 +41,7 @@ if _HERE not in sys.path:
 
 import answers as answers_mod  # noqa: E402
 import attachments  # noqa: E402
+import lineitems  # noqa: E402
 from run_engine import run_engine, warn_if_slow  # noqa: E402
 from run_state import (  # noqa: E402
     ARTIFACTS, StateError, artifact_path, invalidate, normalize_invocation,
@@ -345,6 +346,44 @@ def _not_assessed_banner(case, evidence, customer_text):
     return out
 
 
+def _multi_item_banner(case, line_items):
+    """Say when the single specification below may describe no real product.
+
+    The engine assumes one text is one request. Handed a twenty-line purchase
+    order it does not refuse: it builds ONE specification by taking the size and
+    pressure off the hose line, the length off a barb fitting's THREAD SIZE, and
+    the ends off the fittings — a product that appears nowhere in the document.
+    Then the asks below invite a customer to confirm it.
+
+    This does not fix the merge. Fixing it is per-line-item extraction, upstream.
+    It refuses to let the merged spec be READ as a finding about what was ordered.
+    """
+    if not (line_items or {}).get("multi_item"):
+        return []
+    if not (case.get("fields") or {}):
+        return []            # nothing was merged; the not-assessed banner covers it
+    out = ["** THIS DOCUMENT DESCRIBES MORE THAN ONE PRODUCT — the specification "
+           "below may describe none of them **", ""]
+    for ground in line_items.get("grounds") or []:
+        out.append(f"  - {_safe(ground)}")
+    out += [
+        "",
+        "  The engine reads one text as one request. It has therefore built a "
+        "SINGLE specification",
+        "  out of values taken from across this document, and those values may "
+        "belong to different",
+        "  items — a length read off one product's thread size, a pressure off "
+        "another's. Do not",
+        "  ask anyone to confirm the fields below until you have checked them "
+        "against the document",
+        "  line by line. If this is a purchase order, what it needs is an "
+        "acknowledgement and a ship",
+        "  date, not a specification review.",
+        "",
+    ]
+    return out
+
+
 def _transcript_banner(transcript_text):
     """The machine reading of an attachment, verbatim, under its own banner.
 
@@ -415,7 +454,8 @@ def _operator_banner(operator_text, unattributable=()):
     return out
 
 
-def render(case, evidence=None, case_text=None, transcribed_files=()):
+def render(case, evidence=None, case_text=None, transcribed_files=(),
+           line_items=None):
     """Build the reply body. Pure function of the CaseState and the case text.
 
     `case_text` is the region map from `answers.regions()`; {} means the text was
@@ -489,8 +529,11 @@ def render(case, evidence=None, case_text=None, transcribed_files=()):
 
     # FIRST of all the sections. If the case was never assessed, every line below
     # it — the class, the asks, the empty BOM — is about text that was not the
-    # request, and a reviewer has to meet that before anything else.
+    # request, and a reviewer has to meet that before anything else. The
+    # multi-item warning sits beside it for the same reason: both say the fields
+    # below are not what they appear to be.
     L.extend(_not_assessed_banner(case, evidence, customer_text))
+    L.extend(_multi_item_banner(case, line_items))
 
     # Before the attachments, and before every ask: if an operator's words are in
     # this case, that colours how each line below should be read.
@@ -890,7 +933,9 @@ def main(argv=None):
     transcribed_files = [r.get("filename") for r in
                          ((read_state(args.state).get("transcripts") or {})
                           .get("records") or [])]
-    body = render(case, evidence, case_text, transcribed_files)
+    body = render(case, evidence, case_text, transcribed_files,
+                  lineitems.scan_file(_inv["input"]) if (_inv := normalize_invocation(
+                      read_state(args.state).get("invocation"))) else None)
     try:
         os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
         with open(out, "w", encoding="utf-8") as fh:

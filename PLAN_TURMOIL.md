@@ -63,7 +63,7 @@ not been given.
 
 ## The plan
 
-### Phase 1 — Stop the wrong answer (kit, days)
+### Phase 1 — Stop the wrong answer (kit) — **DONE, v0.22.0**
 
 Detect a multi-item document — repeated rows carrying a part number, a quantity
 and a price — and refuse to present a merged single specification. The reply and

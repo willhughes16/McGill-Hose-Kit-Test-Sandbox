@@ -59,7 +59,7 @@ INVOCATION_KEYS = ("input", "component_ids", "coc", "config_dir")
 # copy can be: `tools/selftest.py` asserts it equals `kit.json`, so a version
 # bump that forgets this line fails the suite instead of mis-attributing a case.
 KIT_NAME = "mcgill-email-to-bom"
-KIT_VERSION = "0.21.0"
+KIT_VERSION = "0.22.0"
 
 # The outcome vocabulary at the Body/Compute boundary (CW-3).
 #
@@ -79,7 +79,7 @@ OUTCOME_COMPLETE = "complete"
 OUTCOME_NEEDS_HUMAN = "needs_human_input"
 
 
-def derive_outcome(case, evidence=None, transcript=None):
+def derive_outcome(case, evidence=None, transcript=None, line_items=None):
     """(outcome, reason) for a run. Pure, and derived from what the run produced.
 
     `complete` does NOT mean sendable. Every case this kit produces is a draft a
@@ -122,6 +122,16 @@ def derive_outcome(case, evidence=None, transcript=None):
     status = (evidence or {}).get("status")
 
     reasons = []
+    if (line_items or {}).get("multi_item") and (case or {}).get("fields"):
+        # FOURTH ground. The engine produced ONE specification from a document
+        # that describes several products, so the fields below may correspond to
+        # nothing the customer ordered. Gated on `fields` because a case with
+        # nothing captured is already covered by the not-assessed banner.
+        reasons.append(
+            "the document describes MORE THAN ONE product and the engine built a "
+            "single specification from across it — "
+            + "; ".join(line_items.get("grounds") or [])
+            + ". The specification may describe no real product")
     if transcript:
         # THIRD ground (CW-9). A transcribed attachment is no longer unread, and
         # that is exactly why it needs a human: a model that transposes a quantity

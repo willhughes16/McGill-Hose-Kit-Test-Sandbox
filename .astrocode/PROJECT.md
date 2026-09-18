@@ -806,6 +806,40 @@ features are now in:
   result: no FAIL lines can mean the check is vacuous OR that the suite never got
   there.
 
+### v0.22.0 — phase 1: a document describing many products is not one request
+
+- REQ-111 **The kit no longer presents a merged specification as a finding.** Job
+  `af54e714` (2026-09-18): a twenty-line purchase order became a single
+  `hose_assembly` whose `size` and `pressure` came off the HOSE line, whose `length`
+  came off a `BARB FITTING, 1" MNPT` — **a thread size** — and whose ends came off
+  the fittings. `class_evidence` was the single word `hose`. The kit then asked the
+  customer to confirm the quantity and length convention of that assembly, for an
+  order whose every line already carried a part number, a quantity and a price.
+  **The specification it described exists in no document.** Thirty-seven rounds
+  never caught it because every fixture is one request per text.
+  `scripts/lineitems.py` reads STRUCTURE, never content — it extracts no value and
+  touches no field — and reports two measured observations: priced line-item rows
+  (PO 7, every fixture 0) and distinct dimensions (fixtures 1-2, a legitimate
+  hose-plus-reducer 3, the PO and a prose list of three hoses 5). Either firing
+  raises a banner in both documents and a fourth `needs_human_input` ground.
+  **Both thresholds were measured, not chosen.** `ROW_MIN` is 3 because a SUBTOTAL
+  line matches the item pattern, so a one-item reorder scores 2 once its total is
+  counted; firing at 2 would flag a single-item PO. `DIM_MIN` is 5 because a
+  hose-plus-reducer honestly names 3.
+  **Two gaps stated rather than hidden:** a genuine two-item order scores 2 rows and
+  is not flagged, and a prose multi-item request with few dimensions is missed by
+  both observations. This does not fix the merge — that is phase 4, per-line-item
+  extraction, upstream.
+  **A rejected design, recorded because measuring refuted it:** the first candidate
+  measured how far apart in the text the engine's evidence spans were, on the theory
+  that a merged spec is assembled from distant places. It does not separate — the PO
+  spans 6 of 12 lines and the fixtures 4-5 of 8-9. The second candidate's dimension
+  regex used `\bin\b`, which never matches `36in` because there is no word boundary
+  between a digit and a letter; it scored 0 on every fixture and looked like a clean
+  separation. Both were caught by measurement, not review.
+  **Mutation-proved:** 9 mutations, 9 caught — including a threshold that nothing
+  guarded until the single-line-reorder check existed.
+
 ### v0.21.0 — the production failure of 2026-09-17, and CW-9
 
 A customer sent a purchase order as a PDF. The kit replied `out_of_scope` — "No

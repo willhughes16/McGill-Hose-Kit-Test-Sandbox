@@ -92,6 +92,14 @@ line:
   the run manifest) and stops there. Reading one yourself would put case data
   into the answer from outside the engine, with none of its guarantees, and every
   open item below it was derived without that file. Tell the operator to open it.
+- **Never treat a merged specification as a finding.** The engine reads one text
+  as one request. Handed a purchase order it does not refuse — it builds ONE
+  specification from values taken across the document, and those values may belong
+  to different items (a length read off a fitting's thread size, a pressure off a
+  hose). When the reply carries the MORE THAN ONE PRODUCT banner, do NOT ask anyone
+  to confirm those fields, and do not present them as what the customer ordered.
+  A purchase order usually needs an acknowledgement and a ship date, not a
+  specification review.
 - **Never let a model answer; it may only transcribe.** `apply_transcript.py`
   folds a machine's reading of an attachment into the case TEXT, and the engine
   extracts from it as it would from any text. A summary is an answer wearing a

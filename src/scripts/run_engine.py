@@ -51,6 +51,7 @@ from email_to_bom import cli  # noqa: E402  (needs the sys.path lines above)
 from email_to_bom.mail import extract_rfq_text  # noqa: E402
 import answers as answers_mod  # noqa: E402
 import attachments  # noqa: E402  (kit-side: the engine reads none of them)
+import lineitems  # noqa: E402
 from run_state import (  # noqa: E402
     ARTIFACTS, KIT_NAME, KIT_VERSION, StateError, all_artifacts, artifact_paths,
     build_argv, derive_outcome, engine_commit, idempotency_key, input_sha256,
@@ -159,7 +160,9 @@ def build_manifest(case, invocation, paths, engine_exit, started, elapsed_ms,
     # the engine could not see (REQ-097). The engine cannot raise an item about
     # an attachment it never opened, so the outcome has to carry it.
     _transcript_names = [r.get("filename") for r in _transcript_records]
-    outcome, outcome_reason = derive_outcome(case, evidence, _transcript_names)
+    _line_items = lineitems.scan_file(invocation["input"])
+    outcome, outcome_reason = derive_outcome(case, evidence, _transcript_names,
+                                             _line_items)
     try:
         size = os.path.getsize(source)
     except OSError:
@@ -199,6 +202,9 @@ def build_manifest(case, invocation, paths, engine_exit, started, elapsed_ms,
         # the CaseState carries a status and no provenance, so a transcribed
         # value reads as `captured` there. The CaseState is the engine's verbatim
         # contract and is never forked -- the provenance sits beside it, here.
+        # Is this ONE request or a list of many? The engine cannot tell and does
+        # not try; it builds a single specification either way (phase 1).
+        "line_items": {k: v for k, v in _line_items.items() if k != "rows"},
         "transcripts": _transcript_records,
         "transcribed_fields": sorted(
             name for name, verdict in answers_mod.sourced_fields(

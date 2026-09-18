@@ -106,6 +106,12 @@ drift. Parity with the source is proven by
   run manifest) so the omission is visible, but the content of a drawing or a
   spec sheet is not in the case. The proper fix is an `ATTACHMENT_NOT_READ` open
   item upstream in `McGill-Core`.
+- **One text is one request — and the kit now says when it isn't.** The engine has
+  no notion of line items: given a twenty-line purchase order it builds a single
+  specification from across it. The kit detects a multi-item document (priced rows,
+  or more distinct dimensions than one assembly has) and says outright that the
+  specification may describe none of the products listed. Per-line-item extraction
+  is upstream work and is not built.
 - **Attachments can be transcribed, never interpreted.** The engine reads no file.
   `scripts/apply_transcript.py` folds a machine's reading of one into the case text,
   so a request that lives in a PDF becomes assessable — and every value taken from it

@@ -65,6 +65,7 @@ if _HERE not in sys.path:
 
 import answers as answers_mod  # noqa: E402
 import attachments  # noqa: E402
+import lineitems  # noqa: E402
 import routing as routing_table  # noqa: E402  (not the CaseState's `routing` key)
 import render_reply  # noqa: E402
 from render_reply import _safe, is_unconfirmed  # noqa: E402
@@ -77,7 +78,7 @@ from run_state import (  # noqa: E402
 RULE = "-" * 78
 
 
-def _uncertainty(case, evidence, case_text, transcribed=()):
+def _uncertainty(case, evidence, case_text, transcribed=(), line_items=None):
     """The grounds a human is needed, in the order they change the answer.
 
     Derived from the case, never asserted: the same two facts `derive_outcome`
@@ -108,6 +109,13 @@ def _uncertainty(case, evidence, case_text, transcribed=()):
         out.append("  UNKNOWN   the attachments could not be checked "
                    f"({_safe((evidence or {}).get('error'))}) — it is not known "
                    "whether the customer sent evidence this case does not contain")
+    if (line_items or {}).get("multi_item") and (case.get("fields") or {}):
+        # The sharpest ground there is: the fields may belong to no single product.
+        for ground in line_items.get("grounds") or []:
+            out.append(f"  MERGED    {_safe(ground)}")
+        out.append("  MERGED    the specification below was built from across a "
+                   "document describing several products, and may describe none "
+                   "of them")
     if transcript_text is not None:
         # A reviewer approving a case built on a transcript is approving a
         # machine's reading of a document, and that is a ground in its own right.
@@ -148,11 +156,11 @@ def _uncertainty(case, evidence, case_text, transcribed=()):
 
 
 def render(case, evidence, reply_body, invocation, addressees, table_error,
-           case_text=None, transcripts=None):
+           case_text=None, transcripts=None, line_items=None):
     """Build the review request. Pure function of what it is handed."""
     outcome, reason = derive_outcome(
         case, evidence,
-        [r.get('filename') for r in transcripts or []])
+        [r.get('filename') for r in transcripts or []], line_items)
     key = idempotency_key(invocation, input_sha256(invocation["input"])) \
         if invocation else None
 
@@ -192,7 +200,8 @@ def render(case, evidence, reply_body, invocation, addressees, table_error,
 
     # ---- why a human ---------------------------------------------------------
     grounds = _uncertainty(case, evidence, case_text,
-                           [r.get('filename') for r in transcripts or []])
+                           [r.get('filename') for r in transcripts or []],
+                           line_items)
     L.append("WHY THIS NEEDS YOU")
     L.append("")
     if grounds:
@@ -311,10 +320,11 @@ def main(argv=None):
         # The embedded reply must be THIS case's reply. Recomputed through the
         # renderer itself rather than compared as prose: a second expression of
         # the reply's content is exactly what this file exists to avoid.
-        expected = render_reply.render(case, evidence, case_text,
-                                       [r.get("filename") for r in
-                                        ((read_state(args.state).get("transcripts")
-                                          or {}).get("records") or [])])
+        expected = render_reply.render(
+            case, evidence, case_text,
+            [r.get("filename") for r in
+             ((read_state(args.state).get("transcripts") or {}).get("records") or [])],
+            lineitems.scan_file(invocation["input"]))
         if expected != reply_body:
             print(f"error: {reply_path} is not the reply for this case.\n"
                   "       A reviewer would approve one text while a different one "
@@ -330,7 +340,8 @@ def main(argv=None):
 
     body = render(case, evidence, reply_body, invocation, addressees,
                   table_error, case_text,
-                  (read_state(args.state).get('transcripts') or {}).get('records'))
+                  (read_state(args.state).get('transcripts') or {}).get('records'),
+                  lineitems.scan_file(invocation["input"]) if invocation else None)
     try:
         os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
         with open(out, "w", encoding="utf-8") as fh:

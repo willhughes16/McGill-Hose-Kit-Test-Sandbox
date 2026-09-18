@@ -1263,6 +1263,108 @@ def po_case(d, body="Please review the attached Purchase Order and send an "
     return "rfq.eml"
 
 
+PO_ROWS = """West Swanzey, NH 03469 Purchase Order
+24156
+TURMOIL P... MFG.PART# DESCRIPTION QTY PRICE AMOUNT
+P02918 HASS-4 BARB FITTING, 1" MNPT, SS 8 17.60 140.80
+P01755 HASS-5 BARB FITTING, 1-1/4", MNPT x BARB, SS 4 24.27 97.08
+P01669 HASS-6 BARB, 1-1/2" MPT X 1-1/2 BARB, SS 2 31.48 62.96
+P00109 3326X8 NIPPLE, 1/2" x CLOSE, BRASS 20 2.13 42.60
+P00102 MID 44-254 TEE, 3/4" NPT, BRASS 12 12.56 150.72
+P02386 HOS -012 HOSE, INSTAGRIP, 3/4" ID X 150', 300 PSI, 50 4.86 243.00
+PLEASE ACKNOWLEDGE AND PROVIDE BEST SHIP DATE"""
+
+
+print("PHASE 1 — a document describing MANY products must not be presented as one")
+# Job af54e714, 2026-09-18. A twenty-line purchase order became a single
+# hose_assembly whose size and pressure came off the HOSE line, whose length came
+# off a BARB FITTING'S THREAD SIZE, and whose ends came off the fittings. The
+# kit then asked the customer to confirm that assembly. The specification it
+# described exists in no document.
+sys.path.insert(0, os.path.join(ROOT, "src", "scripts"))
+import lineitems  # noqa: E402
+
+_probe = lineitems.scan(PO_ROWS)
+check("the PO is detected as multi-item", _probe["multi_item"], f"{_probe['grounds']}")
+check("and BOTH observations fire on it",
+      _probe["row_count"] >= lineitems.ROW_MIN
+      and _probe["dimension_count"] >= lineitems.DIM_MIN,
+      f"rows={_probe['row_count']} dims={_probe['dimension_count']}")
+# Precision matters as much as recall: a banner that fires on ordinary RFQs is a
+# banner reviewers learn to skip, and then the PO goes through unremarked.
+for name in ("plain-steam", "suction-assembly", "confirmed-ids", "multipart-html",
+             "quoted-printable"):
+    with open(os.path.join(FIX, name, "input.eml"), "rb") as fh:
+        _raw = fh.read()
+    sys.path.insert(0, os.path.join(ROOT, "src", "vendor"))
+    from email_to_bom.mail import extract_rfq_text  # noqa: E402
+    check(f"a real RFQ ({name}) is NOT flagged",
+          not lineitems.scan(extract_rfq_text(_raw, filename="x.eml"))["multi_item"])
+# Guards ROW_MIN from being lowered: a subtotal line matches the item pattern, so
+# a one-item reorder scores 2 rows once its total is counted. The mutation run
+# found nothing protecting this number until the check below existed.
+check("a single-line reorder is NOT flagged",
+      not lineitems.scan("Reorder from PO 23990, same as last time:\n"
+                         "P02386 HOS-012 HOSE, INSTAGRIP, 3/4\" ID 50 4.86 243.00\n"
+                         "Please confirm ship date.")["multi_item"],
+      "one priced row is one product")
+check("nor is that reorder once its own subtotal line is counted",
+      not lineitems.scan("Reorder:\nP02386 HOS-012 HOSE, 3/4\" ID 50 4.86 243.00\n"
+                         "Subtotal 1 243.00 243.00")["multi_item"],
+      "a total line matches the item pattern — this is why ROW_MIN is 3")
+check("a legitimate hose-plus-reducer is NOT flagged",
+      not lineitems.scan("Quote 2 assemblies: 3/4in ID hose, 24in long, with a "
+                         "1/2in NPT reducer.")["multi_item"],
+      "three dimensions is an ordinary assembly")
+check("a PROSE list of three hoses IS flagged — no table needed",
+      lineitems.scan('Please quote:\n1) 4 x 1/2" ID steam hose, 36in\n'
+                     '2) 6 x 3/4" ID water hose, 24in\n'
+                     '3) 2 x 1-1/2" ID suction hose')["multi_item"],
+      "the dimension observation exists for exactly this")
+
+d = tempfile.mkdtemp()
+os.makedirs(os.path.join(d, "_report"), exist_ok=True)
+attach_eml(d, "rfq.eml", "Please review the attached Purchase Order and send an "
+                         "acknowledgment with estimated ship date.",
+           [("PO_24156.pdf", "application", "pdf", b"%PDF-1.4 " + b"x" * 400)], [])
+prepare(d, "rfq.eml")
+transcripts_file(d, "t.json", [{"filename": "PO_24156.pdf",
+                                "method": "pdfplumber text extraction",
+                                "text": PO_ROWS}])
+sh([TRANSCRIBE, "--transcripts", "t.json", "--state", "_report/state.json"], d)
+sh([RUN, "--from-state", "--state", "_report/state.json"], d)
+mf = read_json(d, "run_manifest.json")
+case = read_json(d, "case_state.json")
+check("the manifest records the multi-item observation",
+      (mf.get("line_items") or {}).get("multi_item") is True)
+check("the outcome requires a human because the spec was MERGED",
+      mf.get("outcome") == "needs_human_input"
+      and "MORE THAN ONE product" in (mf.get("outcome_reason") or ""),
+      f"reason={(mf.get('outcome_reason') or '')[:90]}")
+sh([REPLY, "--state", "_report/state.json"], d)
+reply = read(d, "reply.md")
+if case.get("fields"):
+    check("the reply warns the specification may describe no real product",
+          "may describe none of them" in reply)
+    check("and names what it counted, not just a verdict",
+          "line-item table" in reply or "different dimensions are named" in reply)
+    sh([REVIEW, "--state", "_report/state.json"], d)
+    check("the reviewer's grounds carry it too",
+          any(l.strip().startswith("MERGED") for l in review_header(d).splitlines()))
+shutil.rmtree(d)
+
+print("PHASE 1b — an ordinary case is untouched")
+d = workdir(("rfq.eml", "plain-steam"))
+prepare(d, "rfq.eml")
+phase1(d, "rfq.eml")
+sh([REPLY, "--state", "_report/state.json"], d)
+plain = read(d, "reply.md")
+check("no multi-item banner on a real RFQ", "MORE THAN ONE PRODUCT" not in plain)
+check("and its outcome reason does not mention merging",
+      "MORE THAN ONE product" not in
+      (read_json(d, "run_manifest.json").get("outcome_reason") or ""))
+shutil.rmtree(d)
+
 print("CW-9 — a machine may TRANSCRIBE an attachment; it may not answer")
 # The case that prompted this: a customer sent a purchase order as a PDF, the
 # engine read the body, and the reply reported `out_of_scope` — a wrong answer
