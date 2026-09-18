@@ -247,9 +247,11 @@ new engine rather than the new checks. Say which when you report it.
 
 ## PUBLISHING
 
-**v0.20.0 was published on 2026-09-17T22:54Z** and the record was read back:
-`latest: 0.20.0`, sha `852edc2f67a008cd`. The operator published deliberately WITHOUT
-round 37 — see the warning below, which still stands.
+**Live: v0.26.0** (2026-09-18T01:29Z, sha `fccdd43c515df397`), read back. The record
+holds 0.26.0, 0.25.0, 0.21.0, 0.14.0, 0.3.0, 0.2.0. **v0.20.0 — the version round 37
+failed — was deleted on 2026-09-18 (HTTP 204, read back).** Versions 0.22.0–0.26.0 have
+had NO verification round; see the warning below, which still stands and now covers
+five versions rather than one.
 
 The read-back also corrected a claim this file and PROJECT.md had both been making.
 The instance did **not** serve v0.3.0: its record shows four versions, and **v0.14.0
@@ -257,7 +259,6 @@ was uploaded 2026-08-27T03:03Z**. The "instance serves v0.3.0" line had been car
 forward from the rollback of v0.6.0 and was stale for three weeks. Read the record
 before repeating a version claim, including one from this file.
 
-    0.20.0  852edc2f67a008cd  2026-09-17T22:54Z
     0.14.0  d1ee073a42f7522f  2026-08-27T03:03Z
     0.3.0   76c920a1a0c0b934  2026-08-26T16:58Z
     0.2.0   6cdfd8364c509f99  2026-08-26T16:02Z
