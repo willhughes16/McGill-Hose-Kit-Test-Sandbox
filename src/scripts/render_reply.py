@@ -42,6 +42,7 @@ if _HERE not in sys.path:
 import answers as answers_mod  # noqa: E402
 import attachments  # noqa: E402
 import lineitems  # noqa: E402
+import questions as questions_mod  # noqa: E402
 from run_engine import run_engine, warn_if_slow  # noqa: E402
 from run_state import (  # noqa: E402
     ARTIFACTS, StateError, artifact_path, invalidate, normalize_invocation,
@@ -468,6 +469,123 @@ def _operator_banner(operator_text, unattributable=()):
     return out
 
 
+def render_customer(case, translations, table_error=None, evidence=None,
+                    line_items=None):
+    """The email the CUSTOMER receives: their questions, in their language.
+
+    Deliberately a SUBSET, and a small one. `render()` below still produces the
+    complete case record -- every field, every open item in the engine's own
+    words, the checkpoints, the rule ids, the backstop -- and that record now
+    lives in `review_request.md`, where the reviewer reads it. This document is
+    what gets sent once they approve.
+
+    What is NOT here, and why: open-item codes, rule ids (`R-CATALOG`), work
+    instructions (`WI-031`), checkpoint owners, knowledge provenance and the
+    remainder backstop. All of it is true and none of it means anything to the
+    person who sent the email. Job `af54e714` offered a 9 KB document full of it
+    as the thing to send; the agent wrote its own email instead.
+
+    The questions come from `config/questions.json` through `questions.py` -- the
+    one place the kit may reword an open item -- and they stay in the engine's
+    order. Items marked internal are COUNTED here and detailed in the review
+    request; they are not silently absent.
+    """
+    L = []
+    cls = (case.get("request_class") or "unclassified").replace("_", " ")
+    urgent = bool((case.get("urgency") or {}).get("flagged"))
+
+    L.append("Thank you for your enquiry — we have it and we are working on it.")
+    L.append("")
+    L.append("This is not a quote and nothing has been ordered. Before we can price "
+             "and schedule")
+    L.append("this accurately we need a few details confirmed.")
+    L.append("")
+    if urgent:
+        L.append("We have noted that this is urgent.")
+        L.append("")
+
+    if table_error:
+        L.append("  (the question wording could not be loaded: "
+                 f"{_safe(table_error)} — the text below is our internal wording)")
+        L.append("")
+
+    asked = [t for t in translations
+             if t["audience"] in (questions_mod.CUSTOMER, questions_mod.UNTRANSLATED)]
+    internal = [t for t in translations if t["audience"] == questions_mod.INTERNAL]
+
+    if asked:
+        L.append("WHAT WE NEED FROM YOU")
+        L.append("")
+        for n, t in enumerate(asked, 1):
+            L.append(f"  {n}. {_safe(t['question'])}")
+            if t["untranslated"]:
+                # Never silently send internal wording as though it were written
+                # for the reader.
+                L.append("     (our internal wording — we have not rephrased this "
+                         "one)")
+        L.append("")
+    else:
+        L.append("We do not need anything further from you at this point.")
+        L.append("")
+
+    if internal:
+        _n = len(internal)
+        L.append(f"  There {'is' if _n == 1 else 'are'} also {_n} "
+                 f"point{'' if _n == 1 else 's'} for us to resolve internally, "
+                 f"which need{'s' if _n == 1 else ''} nothing from you.")
+        L.append("")
+
+    # What we understood, in plain terms. Values only, no statuses or evidence
+    # spans: a customer does not need to know the engine refused to commit.
+    fields = case.get("fields") or {}
+    shown = []
+    for name in sorted(fields):
+        f = fields[name] or {}
+        if f.get("status") != CONFIRMED_STATUS:
+            continue
+        value = f.get("value")
+        if value in (None, "", [], {}):
+            # An ALLOW-list, not a deny-list. The engine attaches internal
+            # commentary to a field (`note`: "family word describes the component
+            # itself; per-end follow-ups not applicable") and a deny-list would
+            # have to grow every time it adds one. A customer sees the attributes
+            # that describe their product and nothing else; the complete record
+            # still carries all of it for the reviewer.
+            value = ", ".join(f"{k}={v}" for k, v in sorted(f.items())
+                              if k in ("family", "gender", "type", "kind", "unit")
+                              and v not in (None, "", [], {}))
+        if value not in (None, "", [], {}):
+            shown.append((name.replace("_", " "), _safe(value)))
+    if shown:
+        L.append("WHAT WE HAVE UNDERSTOOD SO FAR")
+        L.append("")
+        for name, value in shown:
+            L.append(f"  {name}: {value}")
+        L.append("")
+        L.append("  Please correct anything above that is not right.")
+        L.append("")
+
+    if (line_items or {}).get("multi_item"):
+        L.append("  Your message lists more than one item. We are treating the "
+                 "details above as")
+        L.append("  provisional until we have confirmed them against your document "
+                 "line by line.")
+        L.append("")
+
+    unread = [f for f in (evidence or {}).get("attachments") or []]
+    if unread:
+        L.append("  We have your "
+                 + _safe(", ".join(str(f.get("filename")) for f in unread))
+                 + ". Anything in "
+                 + ("it" if len(unread) == 1 else "them")
+                 + " that answers the above is welcome as")
+        L.append("  text in your reply — it saves us a round trip.")
+        L.append("")
+
+    L.append("Once we have these we will come back with a firm answer.")
+    return "\n".join(L).rstrip() + "\n"
+
+
 def render(case, evidence=None, case_text=None, transcripts=(),
            line_items=None):
     """Build the reply body. Pure function of the CaseState and the case text.
@@ -852,6 +970,13 @@ def main(argv=None):
                    help="render WITHOUT re-deriving the CaseState to check it. "
                         "Only for rendering a CaseState in isolation; never in a "
                         "real run, where the check is the safety net.")
+    p.add_argument("--record", action="store_true",
+                   help="render the COMPLETE case record instead of the customer's "
+                        "email — every open item in the engine's own words, the "
+                        "checkpoints, the rule ids. This is what review_request.md "
+                        "embeds and what tools/completeness.py checks.")
+    p.add_argument("--questions", default=None,
+                   help="question translation table (default config/questions.json)")
     args = p.parse_args(argv)
 
     out = args.out or os.path.join("_report", "reply.md")
@@ -948,9 +1073,17 @@ def main(argv=None):
     # here so render() stays a pure function of what it is handed.
     transcripts = ((read_state(args.state).get("transcripts") or {})
                    .get("records") or [])
-    body = render(case, evidence, case_text, transcripts,
-                  lineitems.scan_file(_inv["input"]) if (_inv := normalize_invocation(
-                      read_state(args.state).get("invocation"))) else None)
+    _inv = normalize_invocation(read_state(args.state).get("invocation"))
+    _li = lineitems.scan_file(_inv["input"]) if _inv else None
+    if args.record:
+        # The COMPLETE case record: every field, every open item in the engine's
+        # own words, the checkpoints, the backstop. The reviewer's document
+        # embeds this; the customer's does not.
+        body = render(case, evidence, case_text, transcripts, _li)
+    else:
+        _table, _table_error = questions_mod.load(args.questions)
+        body = render_customer(case, questions_mod.for_case(case, _table),
+                               _table_error, evidence, _li)
     try:
         os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
         with open(out, "w", encoding="utf-8") as fh:

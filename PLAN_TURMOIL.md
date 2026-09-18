@@ -81,7 +81,7 @@ The full transcript moves to `review_request.md` only. `reply.md` names the file
 says a machine read it, and gets on with the questions. The transcript stays on
 disk as its own artifact for anyone comparing it against the original.
 
-### Phase 3 — Customer questions, with the reviewer approving the wording (kit, days)
+### Phase 3 — Customer questions, with the reviewer approving the wording — **DONE, v0.25.0**
 
 `reply.md` becomes customer-facing: each open item is rendered as a question a
 customer can answer, in their language, without internal rule ids.

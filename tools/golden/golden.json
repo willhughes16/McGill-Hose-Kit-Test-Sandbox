@@ -1,10 +1,10 @@
 {
-  "_purpose": "GOLDEN REGRESSION, not parity. reply.md has no source counterpart, so these expected files are the kit's own output, committed to detect UNINTENDED rendering changes (round 34, REQ-079). Re-capture with tools/golden/capture.py and read the diff. See tools/golden/README.md.",
+  "_purpose": "GOLDEN REGRESSION, not parity. the rendered documents have no source counterpart, so these expected files are the kit's own output, committed to detect UNINTENDED rendering changes (round 34, REQ-079). Re-capture with tools/golden/capture.py and read the diff. See tools/golden/README.md.",
   "fixtures": [
     {
       "name": "reply-plain-steam",
-      "_why": "The full shipped pipeline on a real fixture: prepare -> extract -> reply.",
-      "command": "mkdir -p tools/golden/fixtures/reply-plain-steam/_report && python3 -c \"import json;json.dump({{'invocation':{{'input':'{input}','component_ids':[],'coc':False,'config_dir':None}}}},open('tools/golden/fixtures/reply-plain-steam/_report/state.json','w'))\" && python3 src/scripts/run_engine.py --from-state --state tools/golden/fixtures/reply-plain-steam/_report/state.json --out tools/golden/fixtures/reply-plain-steam/_report/case_state.json && python3 src/scripts/render_reply.py --state tools/golden/fixtures/reply-plain-steam/_report/state.json --case-state tools/golden/fixtures/reply-plain-steam/_report/case_state.json --out tools/golden/fixtures/reply-plain-steam/_report/reply.md && python3 tools/parity/wrap_text.py tools/golden/fixtures/reply-plain-steam/_report/reply.md {output}",
+      "_why": "The full shipped pipeline on a real fixture: prepare -> extract -> reply. Captures the COMPLETE RECORD (--record), which is where the rendering surface is.",
+      "command": "mkdir -p tools/golden/fixtures/reply-plain-steam/_report && python3 -c \"import json;json.dump({{'invocation':{{'input':'{input}','component_ids':[],'coc':False,'config_dir':None}}}},open('tools/golden/fixtures/reply-plain-steam/_report/state.json','w'))\" && python3 src/scripts/run_engine.py --from-state --state tools/golden/fixtures/reply-plain-steam/_report/state.json --out tools/golden/fixtures/reply-plain-steam/_report/case_state.json && python3 src/scripts/render_reply.py --record --state tools/golden/fixtures/reply-plain-steam/_report/state.json --case-state tools/golden/fixtures/reply-plain-steam/_report/case_state.json --out tools/golden/fixtures/reply-plain-steam/_report/reply.md && python3 tools/parity/wrap_text.py tools/golden/fixtures/reply-plain-steam/_report/reply.md {output}",
       "input": "tools/parity/fixtures/plain-steam/input.eml",
       "output": "tools/golden/fixtures/reply-plain-steam/actual_output.json",
       "expected_output": "tools/golden/fixtures/reply-plain-steam/expected_output.json",
@@ -13,12 +13,22 @@
     },
     {
       "name": "reply-synthetic-shapes",
-      "_why": "Every rendering shape in one CaseState: unknown priority, long values, falsy keys, remainder keys, off-column BOM data, all statuses.",
-      "command": "python3 src/scripts/render_reply.py --case-state {input} --no-reconcile --out tools/golden/fixtures/reply-synthetic-shapes/reply.md && python3 tools/parity/wrap_text.py tools/golden/fixtures/reply-synthetic-shapes/reply.md {output}",
+      "_why": "Every rendering shape in one CaseState: unknown priority, long values, falsy keys, remainder keys, off-column BOM data, all statuses. Captures the COMPLETE RECORD (--record), which is where the rendering surface is.",
+      "command": "python3 src/scripts/render_reply.py --record --case-state {input} --no-reconcile --out tools/golden/fixtures/reply-synthetic-shapes/reply.md && python3 tools/parity/wrap_text.py tools/golden/fixtures/reply-synthetic-shapes/reply.md {output}",
       "input": "tools/golden/fixtures/reply-synthetic-shapes/case_state.json",
       "output": "tools/golden/fixtures/reply-synthetic-shapes/actual_output.json",
       "expected_output": "tools/golden/fixtures/reply-synthetic-shapes/expected_output.json",
       "timeout": 60,
+      "normalize": {}
+    },
+    {
+      "name": "customer-email-plain-steam",
+      "_why": "The CUSTOMER's email (phase 3): plain questions, no codes, no rule ids. A separate fixture because it is a different document with a different audience, and a change to it is a change to what a customer reads.",
+      "command": "mkdir -p tools/golden/fixtures/customer-email-plain-steam/_report && python3 -c \"import json;json.dump({{'invocation':{{'input':'{input}','component_ids':[],'coc':False,'config_dir':None}}}},open('tools/golden/fixtures/customer-email-plain-steam/_report/state.json','w'))\" && python3 src/scripts/run_engine.py --from-state --state tools/golden/fixtures/customer-email-plain-steam/_report/state.json --out tools/golden/fixtures/customer-email-plain-steam/_report/case_state.json && python3 src/scripts/render_reply.py --state tools/golden/fixtures/customer-email-plain-steam/_report/state.json --case-state tools/golden/fixtures/customer-email-plain-steam/_report/case_state.json --out tools/golden/fixtures/customer-email-plain-steam/_report/reply.md && python3 tools/parity/wrap_text.py tools/golden/fixtures/customer-email-plain-steam/_report/reply.md {output}",
+      "input": "tools/parity/fixtures/plain-steam/input.eml",
+      "output": "tools/golden/fixtures/customer-email-plain-steam/actual_output.json",
+      "expected_output": "tools/golden/fixtures/customer-email-plain-steam/expected_output.json",
+      "timeout": 120,
       "normalize": {}
     }
   ]

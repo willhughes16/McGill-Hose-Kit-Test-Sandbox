@@ -806,6 +806,37 @@ features are now in:
   result: no FAIL lines can mean the check is vacuous OR that the suite never got
   there.
 
+### v0.25.0 — phase 3: the customer gets a question, the reviewer approves it
+
+- REQ-116 **`reply.md` is now the CUSTOMER's email.** The engine writes for an
+  operator — *"Operator: confirm the exact material of every component and whether
+  CMTR/QC material verification (WI-031) applies"* — and that cannot be sent to a
+  customer. `config/questions.json` maps each open-item CODE to a question a customer
+  can answer; `scripts/questions.py` applies it. **This is the one place the kit may
+  reword an open item**, and the rule is otherwise unchanged.
+- REQ-117 **The reviewer approves the translation rather than inheriting it.**
+  `review_request.md` prints the engine's EXACT ask beside the proposed wording for
+  EVERY item, including the ones not asked. The ask is read from the CaseState at
+  render time and is never copied into the table — a second copy of rule text is a
+  copy that drifts. Order is preserved; nothing is dropped from the review; an
+  `internal` item is absent from the customer's email only, and shown as NOT ASKED.
+  **The mechanism justified itself on its first render:** it caught the author's own
+  `DIMENSION_CONFIRM` translation asking about inside-versus-outside diameter when
+  the engine was asking what the measurement REFERS TO. Nobody reviewing the table
+  alone would have seen it.
+- REQ-118 **The completeness guarantee moved to the document that still claims it.**
+  `reply.md` is now a deliberate subset, so `tools/completeness.py` renders
+  `--record` — the complete case record that `review_request.md` embeds. The property
+  did not weaken; asserting it against a customer's email would have asserted the
+  opposite of what phase 3 decided. 184 combinations, 0 violations, unchanged.
+  A third golden fixture now change-detects the customer's email in its own right.
+- **Default-deny in the table:** unsure means `internal`. Under-asking costs a round
+  trip the reviewer can start; mis-asking sends a customer a wrong question about
+  their own order. 26 codes are customer-answerable, 11 internal, and a selftest
+  derives the required set from the SCHEMA so a new engine code fails the suite
+  rather than leaking a work-instruction number into an inbox.
+  **Mutation-proved:** 7 mutations, 7 caught.
+
 ### v0.24.0 — phase 5: the reviewer gets the customer's files
 
 - REQ-114 **`run_manifest.deliver` declares what rides with which message.** The

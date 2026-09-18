@@ -113,6 +113,19 @@ def eml(d, name, text):
     return name
 
 
+def record(d, state="_report/state.json"):
+    """The COMPLETE case record — what `reply.md` used to be.
+
+    Phase 3 made `reply.md` the CUSTOMER's email: plain questions, no open-item
+    codes, no rule ids, no work instructions. Everything the engine produced now
+    lives in the record, which `review_request.md` embeds and which
+    `tools/completeness.py` checks. Every assertion below about a field mark, a
+    banner or the backstop is about THIS, not about the customer's email.
+    """
+    sh([REPLY, "--record", "--state", state, "--out", "_report/record.md"], d)
+    return read(d, "record.md")
+
+
 def read(d, name):
     """A _report artifact as text, or "" when it is absent (a clean FAIL)."""
     try:
@@ -436,8 +449,9 @@ phase2(d)
 rc, out, err = sh([REPLY, "--state", "_report/state.json"], d)
 check("render_reply exits 0", rc == 0, err.strip()[:90])
 check("reply.md is produced", "reply.md" in artifacts(d), f"artifacts={artifacts(d)}")
-with open(os.path.join(d, "_report", "reply.md"), encoding="utf-8") as fh:
-    reply = fh.read()
+# Since phase 3 the CUSTOMER's email is reply.md and the complete record is
+# rendered with --record. Everything below is about the record.
+reply = record(d)
 with open(os.path.join(d, "_report", "case_state.json"), encoding="utf-8") as fh:
     cs = json.load(fh)
 check("every open item appears in the reply",
@@ -476,8 +490,9 @@ for _fx in ("plain-steam", "suction-assembly", "confirmed-ids", "multipart-html"
     _d2 = workdir(("rfq.eml", _fx))
     prepare(_d2, "rfq.eml")
     phase1(_d2, "rfq.eml")
-    sh([REPLY, "--state", "_report/state.json"], _d2)
-    _rp = os.path.join(_d2, "_report", "reply.md")
+    sh([REPLY, "--record", "--state", "_report/state.json",
+        "--out", "_report/record.md"], _d2)
+    _rp = os.path.join(_d2, "_report", "record.md")
     if os.path.isfile(_rp):
         with open(_rp, encoding="utf-8") as fh:
             _all_missing += [f"{_fx}:{m}" for m in
@@ -605,7 +620,7 @@ os.makedirs(os.path.join(d, "_report"), exist_ok=True)
 cpath = os.path.join(d, "_report", "case_state.json")
 with open(cpath, "w", encoding="utf-8") as fh:
     json.dump(SYNTH, fh)
-rc, _, err = sh([REPLY, "--case-state", cpath, "--no-reconcile",
+rc, _, err = sh([REPLY, "--record", "--case-state", cpath, "--no-reconcile",
                  "--out", "_report/reply.md"], d)
 check("the synthetic CaseState renders", rc == 0, err.strip()[:100])
 with open(os.path.join(d, "_report", "reply.md"), encoding="utf-8") as fh:
@@ -663,7 +678,7 @@ d = tempfile.mkdtemp(); os.makedirs(os.path.join(d, "_report"), exist_ok=True)
 cp33 = os.path.join(d, "_report", "case_state.json")
 with open(cp33, "w", encoding="utf-8") as fh:
     json.dump(SYN33, fh)
-rc, _, err = sh([REPLY, "--case-state", cp33, "--no-reconcile",
+rc, _, err = sh([REPLY, "--record", "--case-state", cp33, "--no-reconcile",
                  "--out", "_report/reply.md"], d)
 check("the hostile synthetic CaseState renders", rc == 0, err.strip()[:100])
 with open(os.path.join(d, "_report", "reply.md"), encoding="utf-8") as fh:
@@ -719,7 +734,7 @@ with open(cp34, "w", encoding="utf-8") as fh:
                              "lookups": [{"op": "MUST-APPEAR-LOOKUP"}]},
                "open_items": [], "lines": [], "bom_columns": [],
                "checkpoints": []}, fh)
-rc, _, err = sh([REPLY, "--case-state", cp34, "--no-reconcile",
+rc, _, err = sh([REPLY, "--record", "--case-state", cp34, "--no-reconcile",
                  "--out", "_report/reply.md"], d)
 check("the long-evidence CaseState renders", rc == 0, err.strip()[:90])
 with open(os.path.join(d, "_report", "reply.md"), encoding="utf-8") as fh:
@@ -739,7 +754,7 @@ with open(cp, "w", encoding="utf-8") as fh:
                                             {"Part": "MUST-APPEAR-PART2"}],
                "fields": {}, "open_items": [], "checkpoints": [],
                "knowledge": {"source": "none"}}, fh)
-rc, _, _ = sh([REPLY, "--case-state", cp, "--no-reconcile",
+rc, _, _ = sh([REPLY, "--record", "--case-state", cp, "--no-reconcile",
                "--out", "_report/reply.md"], d)
 with open(os.path.join(d, "_report", "reply.md"), encoding="utf-8") as fh:
     nb = fh.read()
@@ -769,7 +784,7 @@ with open(cpf, "w", encoding="utf-8") as fh:
                "a_false_key": False, "a_zero_key": 0, "a_zero_float": 0.0,
                "fields": {}, "lines": [], "bom_columns": [], "open_items": [],
                "checkpoints": [], "knowledge": {"source": "none"}}, fh)
-rc, _, _ = sh([REPLY, "--case-state", cpf, "--no-reconcile",
+rc, _, _ = sh([REPLY, "--record", "--case-state", cpf, "--no-reconcile",
                "--out", "_report/reply.md"], d)
 with open(os.path.join(d, "_report", "reply.md"), encoding="utf-8") as fh:
     fz = fh.read()
@@ -793,7 +808,7 @@ with open(cp35, "w", encoding="utf-8") as fh:
                "fields": {}, "lines": [], "bom_columns": [], "checkpoints": [],
                "knowledge": {"source": "none",
                              "kextra": "MUST-APPEAR-KEXTRA"}}, fh)
-rc, _, _ = sh([REPLY, "--case-state", cp35, "--no-reconcile",
+rc, _, _ = sh([REPLY, "--record", "--case-state", cp35, "--no-reconcile",
                "--out", "_report/reply.md"], d)
 with open(os.path.join(d, "_report", "reply.md"), encoding="utf-8") as fh:
     pr = fh.read()
@@ -855,7 +870,7 @@ with open(_cp, "w", encoding="utf-8") as fh:
                "fields": {}, "open_items": [], "lines": [], "bom_columns": [],
                "checkpoints": [],
                "knowledge": {"source": "none", "k_false": False, "k_zero": 0}}, fh)
-sh([REPLY, "--case-state", _cp, "--no-reconcile", "--out", "_report/reply.md"], d)
+sh([REPLY, "--record", "--case-state", _cp, "--no-reconcile", "--out", "_report/reply.md"], d)
 with open(os.path.join(d, "_report", "reply.md"), encoding="utf-8") as fh:
     _kf = fh.read()
 check("a False-valued knowledge key reaches the reply", "k_false" in _kf)
@@ -884,7 +899,7 @@ for _st in _statuses:
                                               "status": _st}},
                    "open_items": [], "lines": [], "bom_columns": [],
                    "checkpoints": [], "knowledge": {"source": "none"}}, fh)
-    rc, _, _ = sh([REPLY, "--case-state", _cp, "--no-reconcile",
+    rc, _, _ = sh([REPLY, "--record", "--case-state", _cp, "--no-reconcile",
                    "--out", "_report/reply.md"], d)
     with open(os.path.join(d, "_report", "reply.md"), encoding="utf-8") as fh:
         _body = fh.read()
@@ -908,7 +923,7 @@ with open(_cp, "w", encoding="utf-8") as fh:
                                           "status": "a_status_from_the_future"}},
                "open_items": [], "lines": [], "bom_columns": [],
                "checkpoints": [], "knowledge": {"source": "none"}}, fh)
-sh([REPLY, "--case-state", _cp, "--no-reconcile", "--out", "_report/reply.md"], d)
+sh([REPLY, "--record", "--case-state", _cp, "--no-reconcile", "--out", "_report/reply.md"], d)
 with open(os.path.join(d, "_report", "reply.md"), encoding="utf-8") as fh:
     _fut = fh.read()
 check("an UNKNOWN status is treated as unconfirmed, not as certain",
@@ -970,7 +985,7 @@ attach_eml(d, "rfq.eml",
 prepare(d, "rfq.eml")
 phase1(d, "rfq.eml")
 rc, _, err = sh([REPLY, "--state", "_report/state.json"], d)
-reply = read(d, "reply.md")
+reply = record(d)
 manifest = read_json(d, "run_manifest.json")
 check("the reply renders for a message carrying attachments", rc == 0, err.strip()[:120])
 # The relation, not the wording: EVERY file the scan found must appear in the
@@ -995,7 +1010,7 @@ d = workdir(("rfq.eml", "plain-steam"))
 prepare(d, "rfq.eml")
 phase1(d, "rfq.eml")
 sh([REPLY, "--state", "_report/state.json"], d)
-reply = read(d, "reply.md")
+reply = record(d)
 check("a clean message still states the attachment position",
       "Attachments:" in reply, "silence and 'none' would be indistinguishable")
 check("and it does not raise the unread-evidence block",
@@ -1015,7 +1030,7 @@ prepare(d, "A.eml")
 phase1(d, "A.eml")                      # state.json now describes A
 rc, _, _ = sh([RUN, "--in", "B.eml", "--state", os.path.join("_report", "b_state.json"),
                "--out", os.path.join("_report", "b_case.json")], d)
-rc2, _, _ = sh([REPLY, "--case-state", os.path.join("_report", "b_case.json"),
+rc2, _, _ = sh([REPLY, "--record", "--case-state", os.path.join("_report", "b_case.json"),
                 "--no-reconcile", "--out", os.path.join("_report", "b_reply.md")], d)
 b_reply = read(d, "b_reply.md")
 check("B's isolated reply renders", rc == 0 and rc2 == 0)
@@ -1151,7 +1166,7 @@ check("the ENGINE consumed it — the ask it answers is gone",
 check("and it was the engine's doing, not the kit's: the field is now captured",
       (after.get("fields", {}).get("pressure") or {}).get("status") == "captured")
 sh([REPLY, "--state", "_report/state.json"], d)
-reply = read(d, "reply.md")
+reply = record(d)
 # THE line this feature must not cross.
 check("the reply says the added text is NOT the customer's words",
       "NOT the customer's words" in reply)
@@ -1235,7 +1250,7 @@ d = workdir(("rfq.eml", "plain-steam"))
 prepare(d, "rfq.eml")
 phase1(d, "rfq.eml")
 sh([REPLY, "--state", "_report/state.json"], d)
-plain = read(d, "reply.md")
+plain = record(d)
 check("no operator banner on an ordinary case",
       "OPERATOR ANSWERS WERE ADDED" not in plain)
 check("no field is marked OPERATOR-STATED or SOURCE UNCLEAR",
@@ -1274,6 +1289,72 @@ P00102 MID 44-254 TEE, 3/4" NPT, BRASS 12 12.56 150.72
 P02386 HOS -012 HOSE, INSTAGRIP, 3/4" ID X 150', 300 PSI, 50 4.86 243.00
 PLEASE ACKNOWLEDGE AND PROVIDE BEST SHIP DATE"""
 
+
+print("PHASE 3 — the customer gets a question; the reviewer approves the wording")
+import questions as questions_mod  # noqa: E402
+
+_qt, _qerr = questions_mod.load()
+check("the question table loads", _qerr is None, str(_qerr))
+# The inversion that matters: coverage is derived from the SCHEMA, so a code the
+# engine gains fails here rather than leaking a work-instruction number into a
+# customer's inbox.
+with open(os.path.join(ROOT, "src", "schemas", "case_state.schema.json"),
+          encoding="utf-8") as fh:
+    _codes = set(json.load(fh)["properties"]["open_items"]["items"]
+                 ["properties"]["code"]["enum"])
+check("EVERY open-item code the schema declares is classified",
+      _codes <= set(_qt or {}), f"missing={sorted(_codes - set(_qt or {}))}")
+check("and nothing is classified that the schema does not declare",
+      set(_qt or {}) <= _codes, f"extra={sorted(set(_qt or {}) - _codes)}")
+check("an unknown code falls back to the engine's words and is MARKED",
+      questions_mod.translate({"code": "NEW_CODE_2027", "ask": "Operator: do X per "
+                               "WI-999."}, _qt)["untranslated"] is True,
+      "an untranslated item must not vanish from the customer's email")
+check("an internal item is not asked of the customer",
+      questions_mod.translate({"code": "SELECTION_UNRESOLVED", "ask": "x"},
+                              _qt)["question"] is None)
+
+d = workdir(("rfq.eml", "plain-steam"))
+prepare(d, "rfq.eml")
+phase1(d, "rfq.eml")
+sh([REPLY, "--state", "_report/state.json"], d)
+sh([REVIEW, "--state", "_report/state.json"], d)
+# NOT `email` — that shadows the stdlib module the fixtures build messages
+# with, and the crash surfaced two hundred checks later in an unrelated phase.
+customer_email = read(d, "reply.md")
+review = read(d, "review_request.md")
+case = read_json(d, "case_state.json")
+# The customer's email must not carry the operator's vocabulary.
+check("the customer's email contains no open-item CODES",
+      not any(i["code"] in customer_email for i in case["open_items"]),
+      "codes are for us")
+check("no work-instruction or rule ids reach the customer",
+      "WI-0" not in customer_email and "R-" not in customer_email
+      and "Operator:" not in customer_email)
+check("but a customer question IS there for each customer-facing item",
+      "WHAT WE NEED FROM YOU" in customer_email
+      and any(t["question"] and t["question"][:30] in customer_email
+              for t in questions_mod.for_case(case, _qt)
+              if t["audience"] == questions_mod.CUSTOMER))
+# What makes the rewording permissible: both texts, side by side, every item.
+_side = review.split("THE COMPLETE CASE RECORD")[0]
+check("the review shows the ENGINE's exact ask for every open item",
+      all(i["ask"][:40] in _side for i in case["open_items"] if i.get("ask")),
+      "a reviewer cannot approve a translation they cannot see")
+check("and the customer wording beside it",
+      "customer sees:" in _side and "engine asks :" in _side)
+check("an item not asked is shown as NOT ASKED rather than omitted",
+      ("NOT ASKED" in _side) ==
+      any(t["audience"] == questions_mod.INTERNAL
+          for t in questions_mod.for_case(case, _qt)))
+# Order is never changed -- re-ranking is still forbidden.
+_asked = [t["code"] for t in questions_mod.for_case(case, _qt)]
+check("translation preserves the engine's ORDER",
+      _asked == [i["code"] for i in case["open_items"]],
+      "priority order is the engine's and is never re-ranked")
+check("the complete record still carries the engine's own words",
+      all(i["ask"][:40] in record(d) for i in case["open_items"] if i.get("ask")))
+shutil.rmtree(d)
 
 print("PHASE 5 — the reviewer gets the customer's files; the customer gets none")
 # Operator decision 2026-09-18. The kit does not send email, so it DECLARES what
@@ -1409,7 +1490,7 @@ check("the outcome requires a human because the spec was MERGED",
       and "MORE THAN ONE product" in (mf.get("outcome_reason") or ""),
       f"reason={(mf.get('outcome_reason') or '')[:90]}")
 sh([REPLY, "--state", "_report/state.json"], d)
-reply = read(d, "reply.md")
+reply = record(d)
 if case.get("fields"):
     check("the reply warns the specification may describe no real product",
           "may describe none of them" in reply)
@@ -1425,7 +1506,7 @@ d = workdir(("rfq.eml", "plain-steam"))
 prepare(d, "rfq.eml")
 phase1(d, "rfq.eml")
 sh([REPLY, "--state", "_report/state.json"], d)
-plain = read(d, "reply.md")
+plain = record(d)
 check("no multi-item banner on a real RFQ", "MORE THAN ONE PRODUCT" not in plain)
 check("and its outcome reason does not mention merging",
       "MORE THAN ONE product" not in
@@ -1467,7 +1548,7 @@ check("the manifest records the transcript with its method and hashes",
 check("and names the fields taken from it — the 'proposal only' overlay",
       bool(mf.get("transcribed_fields")), f"got {mf.get('transcribed_fields')}")
 sh([REPLY, "--state", "_report/state.json"], d)
-reply = read(d, "reply.md")
+reply = record(d)
 # Phase 2 moved WHERE the verbatim text goes, not whether it stays verbatim. The
 # reply names the file and the method; the review request carries the transcript
 # in full for checking against the original. Both halves are asserted, because
@@ -1548,7 +1629,7 @@ answers_file(d, "a.json", [{"answer": "Working pressure is 150 psi.",
 sh([ANSWERS, "--answers", "a.json", "--state", "_report/state.json"], d)
 sh([RUN, "--from-state", "--state", "_report/state.json"], d)
 sh([REPLY, "--state", "_report/state.json"], d)
-reply = read(d, "reply.md")
+reply = record(d)
 check("the drawing is STILL reported after an operator answer is applied",
       "drawing-rev-C.pdf" in reply,
       "augmenting the case text must not lose the attachment report")
@@ -1562,7 +1643,7 @@ d = workdir(("rfq.eml", "plain-steam"))
 prepare(d, "rfq.eml")
 phase1(d, "rfq.eml")
 sh([REPLY, "--state", "_report/state.json"], d)
-plain = read(d, "reply.md")
+plain = record(d)
 check("no machine-read banner on an ordinary case",
       "ATTACHMENT READ BY A MACHINE" not in plain)
 check("no field marked TRANSCRIBED", "TRANSCRIBED" not in plain)

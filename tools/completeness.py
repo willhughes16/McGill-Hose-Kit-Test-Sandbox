@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Property check: every non-empty CaseState key must appear in the reply.
+"""Property check: every non-empty CaseState key must appear in the RECORD.
+
+Since phase 3 that is `render_reply.py --record` — the complete case record that
+`review_request.md` embeds — and no longer `reply.md`, which is now the customer's
+email and carries a deliberate subset. The guarantee did not weaken; it moved to
+the document that still claims it.
 
 Round 36 (K-3) established why this has to exist. The golden suite compares
 BYTES, so it can only notice a change to a branch it already exercises — it
@@ -115,7 +120,11 @@ def render(case):
     with open(cp, "w", encoding="utf-8") as fh:
         json.dump(case, fh)
     out = os.path.join(d, "_report", "reply.md")
-    p = subprocess.run([sys.executable, REPLY, "--case-state", cp,
+    # --record: since phase 3 `reply.md` is the CUSTOMER's email, a deliberate
+    # subset, and the completeness property belongs to the COMPLETE case record —
+    # which `review_request.md` embeds. Checking the customer's email for every
+    # CaseState key would assert the opposite of what phase 3 decided.
+    p = subprocess.run([sys.executable, REPLY, "--record", "--case-state", cp,
                         "--no-reconcile", "--out", out],
                        capture_output=True, text=True, timeout=120, cwd=d)
     body = ""

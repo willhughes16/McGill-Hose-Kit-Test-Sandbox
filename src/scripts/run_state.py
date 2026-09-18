@@ -59,7 +59,7 @@ INVOCATION_KEYS = ("input", "component_ids", "coc", "config_dir")
 # copy can be: `tools/selftest.py` asserts it equals `kit.json`, so a version
 # bump that forgets this line fails the suite instead of mis-attributing a case.
 KIT_NAME = "mcgill-email-to-bom"
-KIT_VERSION = "0.24.0"
+KIT_VERSION = "0.25.0"
 
 # The outcome vocabulary at the Body/Compute boundary (CW-3).
 #

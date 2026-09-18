@@ -239,11 +239,16 @@ phases:
         python3 scripts/render_review.py --out _report/review_request.md
              --state _report/state.json
 
-      There are TWO readers and two documents. `_report/review_request.md` is what
-      the Inside Sales REVIEWER reads: the decision being asked for, its grounds,
-      who the case routes to, and the proposed response embedded verbatim.
-      `_report/reply.md` is what gets SENT once they approve. Send the review
-      request first; do not send the reply on your own authority.
+      There are TWO readers and two documents. `_report/reply.md` is the
+      CUSTOMER's email: their questions in plain language, no open-item codes, no
+      rule ids, no work instructions. `_report/review_request.md` is what the
+      Inside Sales REVIEWER reads, and it carries the COMPLETE case record plus
+      the engine's exact ask beside every proposed customer question — so the
+      reviewer approves the wording rather than inheriting it.
+
+      Send the review request first. Do not send the reply on your own authority,
+      and do not rewrite it: if the wording is wrong, that is a defect in
+      config/questions.json, not something to patch in the outgoing message.
 
       `_report/reply.md` is the deliverable a human reads and **the kit attaches
       nothing** — the whole case goes in the message body. Send its contents as

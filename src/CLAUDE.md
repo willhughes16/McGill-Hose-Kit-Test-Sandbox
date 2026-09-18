@@ -60,7 +60,14 @@ These are not style preferences. The engine is built so that being silently wron
 is structurally impossible, and the surrounding narration has to hold the same
 line:
 
-- **Never answer, drop, reword or re-prioritize an open item.** Report them
+- **Never answer, drop or re-prioritize an open item — and reword one ONLY through
+  `config/questions.json`.** The engine writes for an operator and cites internal
+  work instructions; a customer cannot be sent that. So the customer's email carries
+  a translated question, and `review_request.md` prints the engine's EXACT ask beside
+  it for every item so the reviewer approves the wording. Order is never changed.
+  Nothing is dropped from the REVIEW — an item marked `internal` is absent from the
+  customer's email only, and is still listed for the reviewer, marked. **If a
+  translation changes what is being asked, that is a defect.** Report them
   faithfully, highest priority first. They are the whole point of the output.
 - **Never invent a part number, price, lead time or stock position.** The engine
   produces none of these. Pricing and stock questions are acknowledged and routed
@@ -155,10 +162,10 @@ line:
 
 | Path | Role |
 |---|---|
-| `_report/reply.md` | **What you send, as the message body.** The whole case inline: request class and urgency, open items grouped by priority (with a `route` on the items that carry one — it is optional and most do not), every field with its status and evidence, the draft BOM, harness-held checkpoints, corrections found in the thread, and knowledge provenance. |
+| `_report/reply.md` | **The CUSTOMER's email.** Their questions in plain language, what we understood, and nothing else — no open-item codes, no rule ids, no work instructions. Send it once the reviewer approves. |
 | `_report/case_state.json` | The machine contract a conversation layer consumes. Conforms to `schemas/case_state.schema.json`. **Not attached** — cite it, do not send it. |
 | `_report/bom_draft.md` | The engine's own verbatim rendering, byte-identical to what the source engine prints. A **lossy** view kept for parity, not for sending. |
-| `_report/review_request.md` | **What the REVIEWER reads.** The decision being asked for (approve / edit / reject / reassign / escalate), the outcome and its grounds, who the case routes to with each owner resolved through `config/routing.json`, and the proposed response **embedded verbatim**. Send this to the reviewer; send `reply.md` only once they approve. |
+| `_report/review_request.md` | **What the REVIEWER reads, and the complete record.** The decision, the grounds, who it routes to, the files that should arrive with it, the machine transcript, the engine's exact ask beside each proposed customer question, **the complete case record** (every field, every open item in the engine's own words, checkpoints, provenance, backstop), and the customer's email embedded verbatim. |
 | `_report/transcribed_input.txt` | Present ONLY when an attachment was transcribed (`scripts/apply_transcript.py`). The case text plus a machine's reading of a file the customer sent. An **input**, not an output. |
 | `_report/augmented_input.txt` | Present ONLY when a reviewer's out-of-thread answer was folded in (`scripts/apply_answers.py`). It is the case text the engine read: the customer's words plus an operator addendum. An **input**, not an output — the extract phase does not clear it. |
 | `_report/run_manifest.json` | **The run record** a conversation layer reads: which kit version and which engine commit produced this case, the input's sha256 and an `idempotency_key` derived from it, the `outcome` (`complete` / `needs_human_input`), and `evidence_not_read` — the files the customer attached that the engine never opened. Written by the extract phase. |

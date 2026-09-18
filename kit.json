@@ -1,12 +1,13 @@
 {
   "name": "mcgill-email-to-bom",
-  "version": "0.24.0",
+  "version": "0.25.0",
   "description": "Read an inbound customer RFQ email and produce a deterministic CaseState plus a draft bill of materials, with every missing, ambiguous or unsafe item raised as an explicit open item. Drafts only - a human reviews and commits in the ERP.",
   "author": "ScaleUp Labs",
   "contents": [
     "CLAUDE.md",
     "EXAMPLES.md",
     "README.md",
+    "config/questions.json",
     "config/routing.json",
     "generate_report.py",
     "recipes/mcgill-email-to-bom.yaml",
@@ -17,6 +18,7 @@
     "scripts/apply_transcript.py",
     "scripts/attachments.py",
     "scripts/lineitems.py",
+    "scripts/questions.py",
     "scripts/render_reply.py",
     "scripts/render_review.py",
     "scripts/routing.py",
@@ -37,7 +39,7 @@
     "vendor/email_to_bom/validators.py"
   ],
   "download_url": "https://TODO.example/mcgill-email-to-bom/dist/kit.zip",
-  "sha256": "8871673bed483e3fcc9f4048e743017cb52c3fba970cc0398b90a9ab0286369a",
+  "sha256": "bfa6e9f16e92ad382544b19d8aab53437f72950a77c16b293215b5439c6e6ecd",
   "manifest_version": 4,
   "contract_version": "^1.0.0",
   "requires": {

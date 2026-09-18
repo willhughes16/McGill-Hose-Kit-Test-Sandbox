@@ -66,6 +66,7 @@ if _HERE not in sys.path:
 import answers as answers_mod  # noqa: E402
 import attachments  # noqa: E402
 import lineitems  # noqa: E402
+import questions as questions_mod  # noqa: E402
 import routing as routing_table  # noqa: E402  (not the CaseState's `routing` key)
 import render_reply  # noqa: E402
 from render_reply import _bytes, _safe, is_unconfirmed  # noqa: E402
@@ -168,7 +169,8 @@ def _uncertainty(case, evidence, case_text, transcribed=(), line_items=None,
 
 
 def render(case, evidence, reply_body, invocation, addressees, table_error,
-           case_text=None, transcripts=None, line_items=None, delivery=None):
+           case_text=None, transcripts=None, line_items=None, delivery=None,
+           translations=None, record_body=""):
     """Build the review request. Pure function of what it is handed."""
     outcome, reason = derive_outcome(
         case, evidence,
@@ -269,6 +271,44 @@ def render(case, evidence, reply_body, invocation, addressees, table_error,
         L.append(RULE)
         L.append("")
 
+    # The translation, side by side. This is what makes rewording an open item
+    # permissible at all: the reviewer sees the engine's EXACT words next to the
+    # sentence the customer will read, and approves the change rather than
+    # inheriting it. EVERY item appears, including the ones not asked.
+    if translations:
+        L.append("QUESTIONS PROPOSED TO THE CUSTOMER — approve the wording, or "
+                 "correct it in your reply")
+        L.append("")
+        for t in translations:
+            if t["audience"] == questions_mod.INTERNAL:
+                L.append(f"  [{_safe(t['code'])}]  NOT ASKED — ours to resolve")
+            elif t["untranslated"]:
+                L.append(f"  [{_safe(t['code'])}]  NOT TRANSLATED — the customer "
+                         "would see our internal wording")
+            else:
+                L.append(f"  [{_safe(t['code'])}]")
+            L.append(f"      engine asks : {_safe(t['ask'])}")
+            if t["question"] is not None:
+                L.append(f"      customer sees: {_safe(t['question'])}")
+        L.append("")
+        L.append("  The left line is the engine's own words and is never edited. "
+                 "The right line is")
+        L.append("  from config/questions.json. If a translation changes what is "
+                 "being asked, that is")
+        L.append("  a defect — say so rather than approving it.")
+        L.append("")
+
+    # The COMPLETE case record. It used to BE reply.md; now the reply is the
+    # customer's email and this is where every field, every open item in the
+    # engine's own words, the checkpoints and the backstop live. Anything the
+    # CaseState carries and no section above renders appears here, which is what
+    # tools/completeness.py checks.
+    L.append("THE COMPLETE CASE RECORD — everything the engine produced")
+    L.append(RULE)
+    L.append(record_body.rstrip("\n"))
+    L.append(RULE)
+    L.append("")
+
     L.append("PROPOSED RESPONSE — the exact text that would be sent, embedded "
              "verbatim")
     L.append(RULE)
@@ -286,6 +326,8 @@ def main(argv=None):
                         f"{ARTIFACTS['reply']})")
     p.add_argument("--out", dest="out", default=ARTIFACTS["review_request"])
     p.add_argument("--state", default=os.path.join("_report", "state.json"))
+    p.add_argument("--questions", default=None,
+                   help="question translation table (default config/questions.json)")
     p.add_argument("--routing", default=None,
                    help="routing table (default config/routing.json)")
     p.add_argument("--no-reconcile", action="store_true",
@@ -363,9 +405,9 @@ def main(argv=None):
         # The embedded reply must be THIS case's reply. Recomputed through the
         # renderer itself rather than compared as prose: a second expression of
         # the reply's content is exactly what this file exists to avoid.
-        expected = render_reply.render(
-            case, evidence, case_text,
-            (read_state(args.state).get("transcripts") or {}).get("records") or [],
+        _table, _table_error = questions_mod.load(args.questions)
+        expected = render_reply.render_customer(
+            case, questions_mod.for_case(case, _table), _table_error, evidence,
             lineitems.scan_file(invocation["input"]))
         if expected != reply_body:
             print(f"error: {reply_path} is not the reply for this case.\n"
@@ -375,6 +417,10 @@ def main(argv=None):
                   file=sys.stderr)
             return 1
 
+    _qtable, _qerror = questions_mod.load(args.questions)
+    _translations = questions_mod.for_case(case, _qtable)
+    _line_items = (lineitems.scan_file(invocation["input"]) if invocation else None)
+
     addressees, table_error = routing_table.load(args.routing)
     if table_error:
         print(f"warning: {table_error}; every owner will render as NOT ROUTABLE",
@@ -383,10 +429,15 @@ def main(argv=None):
     body = render(case, evidence, reply_body, invocation, addressees,
                   table_error, case_text,
                   (read_state(args.state).get('transcripts') or {}).get('records'),
-                  lineitems.scan_file(invocation["input"]) if invocation else None,
+                  _line_items,
                   build_delivery(evidence,
                                  (read_state(args.state).get('transcripts') or {})
-                                 .get('records')))
+                                 .get('records')),
+                  _translations,
+                  render_reply.render(case, evidence, case_text,
+                                      (read_state(args.state).get('transcripts')
+                                       or {}).get('records') or [],
+                                      _line_items))
     try:
         os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
         with open(out, "w", encoding="utf-8") as fh:
