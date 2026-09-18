@@ -1290,6 +1290,114 @@ P02386 HOS -012 HOSE, INSTAGRIP, 3/4" ID X 150', 300 PSI, 50 4.86 243.00
 PLEASE ACKNOWLEDGE AND PROVIDE BEST SHIP DATE"""
 
 
+PREPARE_INPUT = os.path.join(ROOT, "src", "scripts", "prepare_input.py")
+BODY_HTML = ('<html><head><meta http-equiv="Content-Type" content="text/html; '
+             'charset=utf-8"></head><body><div style="line-break:after-white-space">'
+             '<span style="font-size:16px; font-family:Aptos,sans-serif">Dear Vendor:'
+             '</span><br><span style="font-size:16px">Please review the attached '
+             'Purchase Order and send an acknowledgment with estimated ship date.'
+             '</span><br><span style="font-size:16px">Rachel Anderson</span>'
+             '</div></body></html>')
+
+
+def runtime_shape(d):
+    """What the Astro runtime ACTUALLY delivers: a body file and input/<files>."""
+    with open(os.path.join(d, "body.html"), "w", encoding="utf-8") as fh:
+        fh.write(BODY_HTML)
+    os.makedirs(os.path.join(d, "input"), exist_ok=True)
+    with open(os.path.join(d, "input", "PO_24156.pdf"), "wb") as fh:
+        fh.write(b"%PDF-1.4 " + b"x" * 400)
+
+
+print("JOB 2e07005c — the kit must accept the shape the runtime delivers")
+# The kit was written for an .eml. The runtime hands the agent a body (HTML) and
+# attachments as files. Every good run so far depended on the agent hand-building
+# an .eml; the run that did not lost the purchase order entirely and asked the
+# customer to clarify a CSS font size.
+d = tempfile.mkdtemp()
+os.makedirs(os.path.join(d, "_report"), exist_ok=True)
+runtime_shape(d)
+# 1. The bare .html the agent used must be REFUSED, not read as the customer.
+with open(os.path.join(d, "_report", "state.json"), "w", encoding="utf-8") as fh:
+    json.dump({"invocation": {"input": "body.html", "component_ids": [],
+                              "coc": False, "config_dir": None}}, fh)
+rc, _, err = sh([RUN, "--from-state", "--state", "_report/state.json"], d)
+check("a bare HTML input is REFUSED by the extract phase", rc == 1)
+check("and refused deliberately, naming the fix",
+      "unhandled" not in err and "prepare_input" in err, err.strip()[:100])
+check("no CaseState is written for it", "case_state.json" not in artifacts(d))
+# 2. The kit's own script builds the message.
+rc, out, err = sh([PREPARE_INPUT, "--body", "body.html", "--attachments-dir", "input",
+                   "--subject", "RFQ McGill", "--state", "_report/state.json"], d)
+check("prepare_input builds a message from body + input/", rc == 0, err.strip()[:120])
+inv = (read_json(d, "state.json").get("invocation") or {})
+check("and the invocation now points at the built .eml",
+      str(inv.get("input", "")).endswith("rfq.eml"), f"input={inv.get('input')}")
+rc, _, _ = sh([RUN, "--from-state", "--state", "_report/state.json"], d)
+case = read_json(d, "case_state.json")
+mf = read_json(d, "run_manifest.json")
+check("the engine now reads the customer's WORDS, not the markup",
+      rc == 0 and not any(i["code"] == "DIMENSION_CONFIRM" for i in case.get("open_items", [])),
+      f"codes={[i['code'] for i in case.get('open_items', [])]} — a CSS font size "
+      "became a customer question once")
+check("the engine's own HTML marker fires, as it should for an HTML body",
+      any(i["code"] == "HTML_SOURCE_REVIEW" for i in case.get("open_items", [])))
+check("the attachment is SEEN",
+      [f["filename"] for f in (mf.get("evidence_not_read") or {}).get("attachments", [])]
+      == ["PO_24156.pdf"])
+check("and the outcome demands a human for it",
+      mf.get("outcome") == "needs_human_input", f"got {mf.get('outcome')!r}")
+sh([REPLY, "--state", "_report/state.json"], d)
+check("the customer's email names the file", "PO_24156.pdf" in read(d, "reply.md"))
+# 3. No text/plain placeholder beside the HTML: the engine prefers plain, and a
+#    placeholder is the 39-byte case.
+rec = record(d)
+_body_line = next((l for l in rec.splitlines() if l.startswith("Body text the engine read")), "")
+check("the engine read the real body, not a placeholder",
+      "bytes" in _body_line and int(_body_line.split(":")[1].split()[0]) > 100,
+      _body_line)
+shutil.rmtree(d)
+
+print("JOB 2e07005c-b — the other shapes prepare_input must handle")
+d = tempfile.mkdtemp()
+os.makedirs(os.path.join(d, "_report"), exist_ok=True)
+with open(os.path.join(d, "body.txt"), "w", encoding="utf-8") as fh:
+    fh.write("Please quote 4 of a 36in 1/2in ID 316 SS steam hose, male NPT both ends.")
+rc, _, err = sh([PREPARE_INPUT, "--body", "body.txt", "--state", "_report/state.json"], d)
+check("a plain-text body with no attachments builds", rc == 0, err.strip()[:100])
+rc, _, _ = sh([RUN, "--from-state", "--state", "_report/state.json"], d)
+check("and the engine extracts from it",
+      rc == 0 and bool(read_json(d, "case_state.json").get("fields")))
+# an existing .eml is used as-is
+shutil.copy(os.path.join(FIX, "plain-steam", "input.eml"), os.path.join(d, "given.eml"))
+rc, out, _ = sh([PREPARE_INPUT, "--body", "given.eml", "--state", "_report/state.json"], d)
+check("an existing .eml passes through untouched",
+      rc == 0 and sha256(os.path.join(d, "_report", "rfq.eml"))
+      == sha256(os.path.join(d, "given.eml")))
+# ... but not when attachments are ALSO given: a message inside a message hides
+# its own attachments where the scanner does not look.
+os.makedirs(os.path.join(d, "input"), exist_ok=True)
+with open(os.path.join(d, "input", "x.pdf"), "wb") as fh:
+    fh.write(b"%PDF")
+rc, _, err = sh([PREPARE_INPUT, "--body", "given.eml", "--attachments-dir", "input",
+                 "--state", "_report/state.json"], d)
+check("an .eml plus extra attachments is REFUSED rather than nested",
+      rc == 1 and "unhandled" not in err)
+# The readback guard is NOT defence in depth, and this is the check that proves
+# it. A fragment with markup but no <html>/<body> slips past the HTML detector
+# and gets wrapped as text/plain — so the engine would read `<div>` as the
+# customer's words. The readback catches what the detector missed. Without this
+# check the mutation run reported the guard as unkillable, which is the claim
+# round 37 refuted about a different guard; the lesson was not to repeat it.
+with open(os.path.join(d, "fragment.txt"), "w", encoding="utf-8") as fh:
+    fh.write("Hi,\n<div style=\"font-size:16px\">Please quote 4 hoses.</div>\n")
+rc, _, err = sh([PREPARE_INPUT, "--body", "fragment.txt", "--state",
+                 "_report/state.json"], d)
+check("markup the HTML detector misses is caught on readback and REFUSED",
+      rc == 1 and "unhandled" not in err and "markup" in err,
+      err.strip()[:110])
+shutil.rmtree(d)
+
 print("PHASE 3 — the customer gets a question; the reviewer approves the wording")
 import questions as questions_mod  # noqa: E402
 

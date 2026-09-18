@@ -27,29 +27,43 @@ phases:
       you tried and STOP — do NOT guess at another file, and do NOT invent
       email content.
 
-      Step 3 — Create `_report/` and write `_report/state.json` containing an
-      `invocation` object — and nothing else is needed:
+      Step 3 — BUILD THE MESSAGE WITH THE KIT'S SCRIPT. Do not assemble an .eml
+      by hand, and NEVER point the invocation at a bare .html or .txt you wrote
+      from the body. The runtime hands you the body as text (usually HTML) and
+      the attachments as files under `input/`; the kit was written for an .eml,
+      and the script is what turns one into the other, the same way every time:
 
-        {"invocation": {"input": "<resolved path>",
-                        "component_ids": [<any confirmed IDs>],
-                        "coc": <true|false>,
-                        "config_dir": <path or null>}}
+        python3 scripts/prepare_input.py --body <the body file>
+             --attachments-dir input/ --subject "<the subject>"
+             --state _report/state.json [--component-ids ...] [--coc]
+             [--config-dir DIR]
 
-      This record is the ONLY place the run's arguments are written down. Phase 1
-      reads it with `--from-state`; you must NOT re-type the flags onto
-      its command line. Round 26 found that re-typing them here was an
-      unguarded second copy: drop `--coc` while composing phase 1 and both
-      artifacts come out perfectly self-consistent and quietly wrong about what
-      the customer asked for.
+      It writes `_report/rfq.eml` and `_report/state.json` with the `invocation`
+      pointing at it. It is the ONLY place the run's arguments are written down;
+      later phases read them with `--from-state` and you must NOT re-type them.
+
+      Why this is not optional (job 2e07005c, 2026-09-18): an agent wrote the
+      HTML body to a bare file and pointed the run at it. A bare file has no MIME
+      parts, so the attachment scanner saw nothing and the purchase order that
+      WAS the request vanished from the run; and a bare HTML file is not a
+      message, so the engine read the raw markup and asked the customer to
+      clarify a measurement that was a CSS font size. The engine now REFUSES a
+      bare HTML input, so this step cannot be skipped by accident.
+
+      If the body you were given is already a complete .eml, pass it as --body
+      with no attachments and it is used as-is.
     constraints:
       - "Stay in pwd — do NOT cd or create files outside _report/"
       - "Required RFQ path missing → print usage and STOP"
       - "Write EVERY parsed flag into state.json's invocation — later phases read it, not your command lines"
       - "NEVER fabricate or paraphrase email content — the engine reads the raw bytes"
+      - "ALWAYS build the message with scripts/prepare_input.py — never hand-assemble an .eml, never point the run at a bare .html"
+      - "Every file in input/ is an attachment; pass --attachments-dir input/ so none is lost"
       - "Use python3 for JSON file manipulation"
     input: []
     output:
       - _report/state.json
+      - _report/rfq.eml
 
   # ─────────────────────────────────────────────────────────────────────
   # PHASE 0a — Transcribe attachments (OPTIONAL, and only if you can read them)

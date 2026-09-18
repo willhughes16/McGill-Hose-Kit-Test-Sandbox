@@ -14,7 +14,8 @@ not attached — the reply carries the case inline) plus `_report/bom_draft.md` 
 Directly, without Astro (the kit ships no console script):
 
 ```
-python3 scripts/run_engine.py --in rfq.eml --out _report/case_state.json --state _report/state.json
+python3 scripts/prepare_input.py --body body.html --attachments-dir input/ --state _report/state.json
+python3 scripts/run_engine.py --from-state --out _report/case_state.json --state _report/state.json
 python3 generate_report.py --out _report/bom_draft.md --state _report/state.json
 python3 scripts/render_reply.py --out _report/reply.md --state _report/state.json
 python3 scripts/render_review.py --out _report/review_request.md --state _report/state.json
@@ -131,6 +132,12 @@ order.
   drops `fields`, `routing`, `knowledge` and `supersedes`, and keeps only the code
   and ask from each open item. Anything programmatic must read the JSON — which is why
   the reply states it in words instead of attaching JSON.
+- **The kit builds the message; the agent never does.** `scripts/prepare_input.py`
+  takes the body file and everything in `input/` and writes one `.eml`: HTML as a
+  `text/html` part so the engine's own HTML-to-text runs, every file as a real
+  attachment so the scanner sees it, and NO `text/plain` placeholder — the engine
+  prefers plain, and a placeholder is how a 39-byte "This message contains HTML."
+  once became the whole case. A bare `.html` pointed at the engine is refused.
 - **A model may transcribe an attachment; it may not answer.** When the request is
   the attachment — a PO as a PDF — `scripts/apply_transcript.py` folds a transcription
   into the case text and the ENGINE extracts from it as it would from any text. The

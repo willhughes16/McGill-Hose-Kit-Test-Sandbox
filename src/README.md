@@ -30,6 +30,18 @@ or re-asking.
 
 ## Usage
 
+The runtime delivers a body file and an `input/` directory of attachments, not an
+`.eml`. Build the message first:
+
+```
+python3 scripts/prepare_input.py --body body.html --attachments-dir input/ \
+    --subject "RFQ" --state _report/state.json
+```
+
+Every later phase reads the invocation that writes. A bare `.html` handed straight
+to the engine is refused.
+
+
 As an Astro kit, you ask Astro for it and pass the RFQ plus any flags as the
 kit's arguments — Astro executes `recipes/mcgill-email-to-bom.yaml`:
 

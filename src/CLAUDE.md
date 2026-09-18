@@ -24,6 +24,18 @@ the attached drawing yields a case that correctly reports them missing and knows
 nothing about the drawing. The kit therefore names every attached file it finds,
 in the reply and in the manifest, without opening any of them.
 
+## How the input reaches the kit — read this before the recipe
+
+The runtime does NOT hand you an `.eml`. It hands you the email BODY as a file
+(usually HTML) and the ATTACHMENTS as separate files under `input/`. The kit was
+written for an `.eml`, and `scripts/prepare_input.py` is what turns one into the
+other — the same way every time. **Never assemble a message by hand, and never
+point the run at a bare `.html` or `.txt` you wrote from the body.** The extract
+phase refuses a bare HTML file outright, because on 2026-09-18 one reached the
+engine: the scanner saw no attachments, the purchase order that WAS the request
+vanished from the run, and the engine read the raw markup and asked the customer to
+clarify a measurement that was a CSS font size.
+
 ## How to run
 
 1. Read `recipes/mcgill-email-to-bom.yaml` — it is the execution contract. Execute its
@@ -99,6 +111,10 @@ line:
   the run manifest) and stops there. Reading one yourself would put case data
   into the answer from outside the engine, with none of its guarantees, and every
   open item below it was derived without that file. Tell the operator to open it.
+- **Never point the run at a bare `.html`.** Build the message with
+  `scripts/prepare_input.py`. A bare HTML file is not a message: it has no MIME
+  parts for the attachment scanner, and the engine reads its markup as the
+  customer's words. The extract phase refuses one, naming the script.
 - **Never treat a merged specification as a finding.** The engine reads one text
   as one request. Handed a purchase order it does not refuse — it builds ONE
   specification from values taken across the document, and those values may belong

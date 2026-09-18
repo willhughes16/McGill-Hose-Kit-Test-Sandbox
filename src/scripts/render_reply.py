@@ -494,11 +494,23 @@ def render_customer(case, translations, table_error=None, evidence=None,
     cls = (case.get("request_class") or "unclassified").replace("_", " ")
     urgent = bool((case.get("urgency") or {}).get("flagged"))
 
+    asked = [t for t in translations
+             if t["audience"] in (questions_mod.CUSTOMER, questions_mod.UNTRANSLATED)]
+    internal = [t for t in translations if t["audience"] == questions_mod.INTERNAL]
+
     L.append("Thank you for your enquiry — we have it and we are working on it.")
     L.append("")
-    L.append("This is not a quote and nothing has been ordered. Before we can price "
-             "and schedule")
-    L.append("this accurately we need a few details confirmed.")
+    # The opening must agree with what follows. Job 2e07005c's follow-up rendered
+    # "we need a few details confirmed" and then "we do not need anything further"
+    # three lines apart.
+    if asked:
+        L.append("This is not a quote and nothing has been ordered. Before we can "
+                 "price and schedule")
+        L.append("this accurately we need a few details confirmed.")
+    else:
+        L.append("This is not a quote and nothing has been ordered yet. We have what "
+                 "we need from you")
+        L.append("for now and are reviewing it.")
     L.append("")
     if urgent:
         L.append("We have noted that this is urgent.")
@@ -508,10 +520,6 @@ def render_customer(case, translations, table_error=None, evidence=None,
         L.append("  (the question wording could not be loaded: "
                  f"{_safe(table_error)} — the text below is our internal wording)")
         L.append("")
-
-    asked = [t for t in translations
-             if t["audience"] in (questions_mod.CUSTOMER, questions_mod.UNTRANSLATED)]
-    internal = [t for t in translations if t["audience"] == questions_mod.INTERNAL]
 
     if asked:
         L.append("WHAT WE NEED FROM YOU")
@@ -523,9 +531,6 @@ def render_customer(case, translations, table_error=None, evidence=None,
                 # for the reader.
                 L.append("     (our internal wording — we have not rephrased this "
                          "one)")
-        L.append("")
-    else:
-        L.append("We do not need anything further from you at this point.")
         L.append("")
 
     if internal:
@@ -574,15 +579,18 @@ def render_customer(case, translations, table_error=None, evidence=None,
 
     unread = [f for f in (evidence or {}).get("attachments") or []]
     if unread:
-        L.append("  We have your "
-                 + _safe(", ".join(str(f.get("filename")) for f in unread))
-                 + ". Anything in "
-                 + ("it" if len(unread) == 1 else "them")
-                 + " that answers the above is welcome as")
-        L.append("  text in your reply — it saves us a round trip.")
+        names = _safe(", ".join(str(f.get("filename")) for f in unread))
+        it = "it" if len(unread) == 1 else "them"
+        if asked:
+            L.append(f"  We have your {names}. Anything in {it} that answers the "
+                     "above is welcome as")
+            L.append("  text in your reply — it saves us a round trip.")
+        else:
+            L.append(f"  We have your {names} and are working from {it}.")
         L.append("")
 
-    L.append("Once we have these we will come back with a firm answer.")
+    L.append("Once we have these we will come back with a firm answer." if asked
+             else "We will come back to you with a firm answer.")
     return "\n".join(L).rstrip() + "\n"
 
 

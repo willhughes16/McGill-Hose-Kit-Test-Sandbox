@@ -48,7 +48,7 @@ for _p in (_VENDOR, _HERE):
         sys.path.insert(0, _p)
 
 from email_to_bom import cli  # noqa: E402  (needs the sys.path lines above)
-from email_to_bom.mail import extract_rfq_text  # noqa: E402
+from email_to_bom.mail import extract_rfq_text, looks_like_mime  # noqa: E402
 import answers as answers_mod  # noqa: E402
 import attachments  # noqa: E402  (kit-side: the engine reads none of them)
 import lineitems  # noqa: E402
@@ -64,6 +64,20 @@ from run_state import (  # noqa: E402
 # render_reply.py's reconciliation), so the real cost is ~4x a single pass. We warn rather than refuse: refusing would change
 # behaviour and break parity with the source, which processes it regardless.
 SLOW_INPUT_BYTES = 100 * 1024
+
+
+def is_bare_html(path):
+    """Markup that is not inside a MIME message. The engine cannot read it."""
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(4096)
+    except OSError:
+        return False
+    if looks_like_mime(head, path):
+        return False
+    low = head.lstrip().lower()
+    return low.startswith((b"<!doctype", b"<html", b"<head", b"<body")) or \
+        b"<html" in low or b"<body" in low
 
 
 def warn_if_slow(path, passes):
@@ -407,6 +421,17 @@ def main(argv=None):
 
     if not os.path.isfile(invocation["input"]):
         print(f"error: no such RFQ file: {invocation['input']}", file=sys.stderr)
+        return 1
+    if is_bare_html(invocation["input"]):
+        # Job 2e07005c: a bare .html is not a message, so the engine's reader
+        # returns the raw markup and DIMENSION_CONFIRM fires on a font size. The
+        # customer was asked to clarify a measurement that existed only in CSS.
+        print(f"error: {invocation['input']} is raw HTML, not a message. The engine "
+              "would read the MARKUP as the customer's words — a CSS font size has "
+              "already become a customer question this way. Wrap it first:\n"
+              "       python3 scripts/prepare_input.py --body <that file> "
+              "--attachments-dir input/ --state _report/state.json",
+              file=sys.stderr)
         return 1
     warn_if_slow(invocation["input"], passes=1)
 

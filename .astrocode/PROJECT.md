@@ -806,6 +806,44 @@ features are now in:
   result: no FAIL lines can mean the check is vacuous OR that the suite never got
   there.
 
+### v0.26.0 — the kit accepts the shape the runtime actually delivers
+
+- REQ-119 **`scripts/prepare_input.py` builds the message; the agent never does.**
+  The kit was written for an `.eml`. The Astro runtime delivers the body as a file
+  (usually HTML) and the attachments as files under `input/`. Every successful run
+  had depended on the agent hand-assembling an `.eml` from those pieces, and job
+  `2e07005c` (2026-09-18) is what happened when it did not: it pointed the run at a
+  bare `rfq_email.html`. No MIME parts → the scanner saw nothing → REQ-097 never
+  fired → **`outcome: complete`**, and the purchase order that WAS the request
+  vanished from every artifact. The script writes one `.eml`: HTML as a `text/html`
+  part so the engine's HTML-to-text path runs, every file in `input/` as a real
+  attachment part, and **no `text/plain` placeholder** — the engine prefers plain,
+  and a placeholder is the 39-byte case of 2026-09-17. An existing `.eml` passes
+  through untouched; an `.eml` plus extra attachments is refused rather than nested,
+  because a message inside a message hides its attachments where the scanner does
+  not look. The built message is read back through the engine's own reader and
+  refused if markup survives or nothing is extracted.
+- REQ-120 **A bare HTML file is refused by the extract phase.** A bare `.html` is not
+  a message, so `extract_rfq_text` returns the raw markup and the engine reads
+  `font-size:16px` as the customer's words. In job `2e07005c` `DIMENSION_CONFIRM`
+  fired on a CSS value and **the customer was asked to clarify a measurement that
+  does not exist in their email** — the stopping-rule class, in the version
+  published an hour earlier. The refusal names the fix. Reproduced locally: the same
+  HTML yields `DIMENSION_CONFIRM` on `charset=utf-8`.
+- **The verification gap this exposed:** every selftest built a well-formed `.eml`.
+  None exercised the shape the runtime delivers. There is now a fixture that does,
+  end to end, and it is the first check in the suite to assert on the runtime's
+  contract rather than the kit's.
+- **Mutation-proved:** 7 mutations, 7 caught — after one survived. The readback
+  markup guard looked like defence in depth; a body carrying `<div>` but no
+  `<html>`/`<body>` slips past the HTML detector, is wrapped as plain text, and only
+  the readback stops the engine reading the tag as the customer's words. Round 37
+  refuted the author's last "defence in depth" claim; this time the check was written
+  instead.
+- **Also fixed:** the customer email's opening said "we need a few details confirmed"
+  three lines above "we do not need anything further from you". The opening now
+  agrees with what follows.
+
 ### v0.25.0 — phase 3: the customer gets a question, the reviewer approves it
 
 - REQ-116 **`reply.md` is now the CUSTOMER's email.** The engine writes for an
