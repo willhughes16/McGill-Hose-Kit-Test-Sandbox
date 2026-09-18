@@ -806,6 +806,28 @@ features are now in:
   result: no FAIL lines can mean the check is vacuous OR that the suite never got
   there.
 
+### v0.23.0 — phase 2: the transcript goes where it is useful
+
+- REQ-112 **`reply.md` names the transcribed file; `review_request.md` carries the
+  text.** Job `af54e714` produced a 9,004-byte reply whose first two hundred lines
+  were a purchase order's transcript — addresses, fax numbers, account numbers, unit
+  prices — with the questions underneath. The executing agent ignored the artifact
+  and hand-wrote its own email, breaking the kit's own instruction to send this file
+  unsummarised. **When the deliverable is unusable, the rule protecting it gets
+  broken**, and that is a design failure rather than an operator one. The same reply
+  is now 4,533 bytes.
+  Nothing is summarised: a summary of a transcript is a model's answer wearing a
+  transcript's clothes. Only its LOCATION changed, and both halves are asserted —
+  the reply must NOT repeat it, the review request MUST carry it verbatim.
+- REQ-113 **The reviewer's grounds are grounds, not a document dump.** The same
+  fault existed one level up: `_uncertainty` emitted one `MACHINE` line per
+  transcribed line, putting eighty rows of a purchase order between a reviewer and
+  the decision. The ground is now one line per file (name, method, line count) and
+  the transcript is its own section.
+  **Mutation-proved:** 4 mutations, 4 caught — dumping the transcript back into the
+  reply, dropping the file/method naming, removing the review request's section, and
+  reverting the ground to per-line output.
+
 ### v0.22.0 — phase 1: a document describing many products is not one request
 
 - REQ-111 **The kit no longer presents a merged specification as a finding.** Job

@@ -75,7 +75,7 @@ This does not make a PO properly assessable. It stops the kit stating an invente
 spec as fact while phase 4 is built, and it is the only phase that protects a
 customer this week.
 
-### Phase 2 — Make the reply sendable (kit, hours)
+### Phase 2 — Make the reply sendable (kit) — **DONE, v0.23.0**
 
 The full transcript moves to `review_request.md` only. `reply.md` names the file,
 says a machine read it, and gets on with the questions. The transcript stays on

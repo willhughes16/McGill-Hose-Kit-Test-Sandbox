@@ -1401,10 +1401,28 @@ check("and names the fields taken from it — the 'proposal only' overlay",
       bool(mf.get("transcribed_fields")), f"got {mf.get('transcribed_fields')}")
 sh([REPLY, "--state", "_report/state.json"], d)
 reply = read(d, "reply.md")
-check("the transcript is rendered VERBATIM, not summarised",
-      "PURCHASE ORDER 24156" in reply)
+# Phase 2 moved WHERE the verbatim text goes, not whether it stays verbatim. The
+# reply names the file and the method; the review request carries the transcript
+# in full for checking against the original. Both halves are asserted, because
+# dropping either would be a real loss: a reply that repeats a two-page PO is
+# unusable, and a review request without the text leaves a reviewer checking a
+# transcript blind.
+check("the reply does NOT repeat the transcript",
+      "PURCHASE ORDER 24156" not in reply,
+      "a 9 KB reply is why the agent hand-wrote its own email")
+check("the reply names the file and how it was read",
+      "PO_24156.pdf" in reply and "vision" in reply)
 check("the reply says the text was not typed by the customer",
       "not typed by the customer" in reply)
+sh([REVIEW, "--state", "_report/state.json"], d)
+check("the reviewer's GROUND is a summary line, not the whole transcript",
+      any(l.strip().startswith("MACHINE") and "shown in full below" in l
+          for l in review_header(d).splitlines()),
+      "eighty MACHINE rows between a reviewer and their decision is the same "
+      "unusability that got the reply ignored")
+check("the REVIEW REQUEST carries the transcript verbatim",
+      "PURCHASE ORDER 24156" in read(d, "review_request.md"),
+      "the reviewer must be able to check it against the original")
 for name in mf.get("transcribed_fields") or []:
     check(f"field {name} is marked TRANSCRIBED",
           any(l.startswith(name) and "TRANSCRIBED" in l for l in reply.splitlines()))

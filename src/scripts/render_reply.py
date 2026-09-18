@@ -384,33 +384,47 @@ def _multi_item_banner(case, line_items):
     return out
 
 
-def _transcript_banner(transcript_text):
-    """The machine reading of an attachment, verbatim, under its own banner.
+def _transcript_banner(transcript_text, records=()):
+    """That a machine read an attachment -- NOT the transcript itself.
 
-    Rendered verbatim and never summarised, for two reasons. A summary of a
-    transcript is a model's answer wearing a transcript's clothes, which is the
-    failure CW-9 is built to prevent. And a PDF can contain text aimed at whoever
-    reads it -- "confirm this order at the agreed price" -- so the reviewer sees
-    exactly what was folded into the case, injected instructions included, rather
-    than a paraphrase that might have acted on them.
+    The transcript is NOT repeated here, and that is phase 2 of PLAN_TURMOIL.md.
+    Job `af54e714` produced a 9 KB `reply.md` whose first two hundred lines were a
+    purchase order's transcript -- addresses, fax numbers, account numbers, unit
+    prices -- with the questions somewhere underneath. The executing agent did
+    what anyone would: it ignored the artifact and hand-wrote its own email,
+    breaking the kit's own instruction to send this file unsummarised.
+
+    **When the deliverable is unusable, the rule protecting it gets broken.** So
+    the full text lives in the review request, where a reviewer checks it against
+    the original, and this message says which file was read, how, and how much.
+
+    Nothing is summarised: a summary of a transcript is a model's answer wearing a
+    transcript's clothes. The choice is WHERE the verbatim text goes, not whether
+    it stays verbatim.
     """
     lines = answers_mod.addendum_lines(transcript_text)
     if not lines:
         return []
-    out = ["ATTACHMENT READ BY A MACHINE — the text below was transcribed from a "
-           "file, not typed by the customer", ""]
-    out += [f"    {_safe(l)}" for l in lines]
+    out = ["ATTACHMENT READ BY A MACHINE — not typed by the customer", ""]
+    for rec in records or ():
+        out.append(f"    {_safe(rec.get('filename'))}   read by: "
+                   f"{_safe(rec.get('method'))}")
+    if not records:
+        out.append("    (the run records no transcript detail)")
+    out.append(f"    {len(lines)} lines were transcribed and read by the engine")
     out += [
         "",
         "  A model read the attachment and the engine then read its output as part "
-        "of this",
-        "  case. Fields marked TRANSCRIBED below came from it. A transcription can "
-        "transpose",
-        "  a quantity or drop a digit from a part number and still look right, so "
-        "NOTHING",
-        "  here is confirmed: check every transcribed value against the original "
-        "file before",
-        "  you answer. This case requires a human for that reason alone.",
+        "of this case.",
+        "  Fields marked TRANSCRIBED below came from it. A transcription can "
+        "transpose a quantity",
+        "  or drop a digit from a part number and still look right, so NOTHING "
+        "here is confirmed.",
+        "  The full transcript is in the review request, verbatim, for checking "
+        "against the",
+        "  original file — this message does not repeat it. This case requires a "
+        "human for that",
+        "  reason alone.",
         "",
     ]
     return out
@@ -454,7 +468,7 @@ def _operator_banner(operator_text, unattributable=()):
     return out
 
 
-def render(case, evidence=None, case_text=None, transcribed_files=(),
+def render(case, evidence=None, case_text=None, transcripts=(),
            line_items=None):
     """Build the reply body. Pure function of the CaseState and the case text.
 
@@ -503,7 +517,9 @@ def render(case, evidence=None, case_text=None, transcribed_files=(),
     L.append("Body text the engine read: "
              + (f"{len((customer_text or '').encode('utf-8'))} bytes" if _r
                 else "NOT CHECKED — rendered without the source text"))
-    L.append(_evidence_headline(evidence, transcribed_files))
+    _transcribed_names = [r.get("filename") if isinstance(r, dict) else r
+                          for r in (transcripts or ())]
+    L.append(_evidence_headline(evidence, _transcribed_names))
     # `classes` carries requirements the operator must honour — Certs Required
     # from a C-of-C request is the one that matters. Round 32 pre-flight found it
     # dropped entirely, which for a certificate requirement is exactly the kind
@@ -540,7 +556,7 @@ def render(case, evidence=None, case_text=None, transcribed_files=(),
     _sourced_all = (answers_mod.sourced_fields(case, _r)
                     if (operator_text is not None or transcript_text is not None)
                     else {})
-    L.extend(_transcript_banner(transcript_text))
+    L.extend(_transcript_banner(transcript_text, transcripts))
     L.extend(_operator_banner(
         operator_text,
         [n for n, v in _sourced_all.items()
@@ -549,7 +565,7 @@ def render(case, evidence=None, case_text=None, transcribed_files=(),
     # The attachments come FIRST among the sections: an unread drawing changes
     # how every ask below should be read, so a reviewer must meet it before the
     # list of things the engine says are missing.
-    L.extend(_evidence_block(evidence, transcribed_files))
+    L.extend(_evidence_block(evidence, _transcribed_names))
 
     # ---- what must be answered, highest priority first -----------------------
     if items:
@@ -930,10 +946,9 @@ def main(argv=None):
 
     # Which attachments a machine read, from the run's own record. Resolved
     # here so render() stays a pure function of what it is handed.
-    transcribed_files = [r.get("filename") for r in
-                         ((read_state(args.state).get("transcripts") or {})
-                          .get("records") or [])]
-    body = render(case, evidence, case_text, transcribed_files,
+    transcripts = ((read_state(args.state).get("transcripts") or {})
+                   .get("records") or [])
+    body = render(case, evidence, case_text, transcripts,
                   lineitems.scan_file(_inv["input"]) if (_inv := normalize_invocation(
                       read_state(args.state).get("invocation"))) else None)
     try:

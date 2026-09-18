@@ -78,7 +78,8 @@ from run_state import (  # noqa: E402
 RULE = "-" * 78
 
 
-def _uncertainty(case, evidence, case_text, transcribed=(), line_items=None):
+def _uncertainty(case, evidence, case_text, transcribed=(), line_items=None,
+                 transcripts=None):
     """The grounds a human is needed, in the order they change the answer.
 
     Derived from the case, never asserted: the same two facts `derive_outcome`
@@ -119,8 +120,19 @@ def _uncertainty(case, evidence, case_text, transcribed=(), line_items=None):
     if transcript_text is not None:
         # A reviewer approving a case built on a transcript is approving a
         # machine's reading of a document, and that is a ground in its own right.
-        for line in answers_mod.addendum_lines(transcript_text):
-            out.append(f"  MACHINE   {_safe(line)}")
+        # The GROUND is short; the transcript itself is a section of its own
+        # further down. Emitting one `MACHINE` line per transcribed line put
+        # eighty rows of a purchase order between the reviewer and the decision
+        # they were being asked to make -- the same unusability that made the
+        # reply get ignored (phase 2).
+        _count = len(answers_mod.addendum_lines(transcript_text))
+        for rec in transcripts or []:
+            out.append(f"  MACHINE   {_safe(rec.get('filename'))} was read by a "
+                       f"model ({_safe(rec.get('method'))}) — "
+                       f"{_count} lines, shown in full below")
+        if not transcripts:
+            out.append(f"  MACHINE   an attachment was read by a model — {_count} "
+                       "lines, shown in full below")
         for name, verdict in answers_mod.sourced_fields(case, _r).items():
             if verdict == answers_mod.TRANSCRIBED:
                 out.append(f"  MACHINE   {_safe(name)} was read off an attachment "
@@ -201,7 +213,7 @@ def render(case, evidence, reply_body, invocation, addressees, table_error,
     # ---- why a human ---------------------------------------------------------
     grounds = _uncertainty(case, evidence, case_text,
                            [r.get('filename') for r in transcripts or []],
-                           line_items)
+                           line_items, transcripts)
     L.append("WHY THIS NEEDS YOU")
     L.append("")
     if grounds:
@@ -225,6 +237,20 @@ def render(case, evidence, reply_body, invocation, addressees, table_error,
     L.append("    appears it is the customer's own words quoted back.")
     L.append("  - This is a draft. A human commits it in the ERP.")
     L.append("")
+
+    # The transcript, verbatim, as its own section. Here and not in the reply
+    # (phase 2): the reviewer is the one who checks a machine's reading against
+    # the original document, and the customer's email is not the place for two
+    # pages of someone else's purchase order.
+    transcript_text = (case_text or {}).get(answers_mod.TRANSCRIBED)
+    if transcript_text is not None:
+        L.append("WHAT THE MACHINE READ — verbatim, for checking against the "
+                 "original file")
+        L.append(RULE)
+        for line in answers_mod.addendum_lines(transcript_text):
+            L.append(f"  {_safe(line)}")
+        L.append(RULE)
+        L.append("")
 
     L.append("PROPOSED RESPONSE — the exact text that would be sent, embedded "
              "verbatim")
@@ -322,8 +348,7 @@ def main(argv=None):
         # the reply's content is exactly what this file exists to avoid.
         expected = render_reply.render(
             case, evidence, case_text,
-            [r.get("filename") for r in
-             ((read_state(args.state).get("transcripts") or {}).get("records") or [])],
+            (read_state(args.state).get("transcripts") or {}).get("records") or [],
             lineitems.scan_file(invocation["input"]))
         if expected != reply_body:
             print(f"error: {reply_path} is not the reply for this case.\n"

@@ -100,6 +100,11 @@ line:
   to confirm those fields, and do not present them as what the customer ordered.
   A purchase order usually needs an acknowledgement and a ship date, not a
   specification review.
+- **The transcript belongs in the review request, not the reply.** `reply.md`
+  names the file and the method; `review_request.md` carries the text verbatim so a
+  reviewer can check it against the original. Do not paste a transcript into a
+  customer's email — a nine-kilobyte reply is why an agent once ignored this file
+  and wrote its own.
 - **Never let a model answer; it may only transcribe.** `apply_transcript.py`
   folds a machine's reading of an attachment into the case TEXT, and the engine
   extracts from it as it would from any text. A summary is an answer wearing a
