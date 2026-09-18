@@ -9,21 +9,46 @@ The operator's standing instruction: **run rounds, fix findings, and publish whe
 ready.** They have twice authorised rolling a bad version back off the instance, and
 both rollbacks worked.
 
-> **READ THIS BEFORE PLANNING A ROUND: the engine underneath changed.** Rounds 25–36
-> all ran against the engine as vendored at `b15b23d`. The kit now vendors
-> **`6b0a897`**, whose engine BEHAVIOUR is that of `ae4411f` — one behavioural commit
-> later than any round has seen ("size is not a length"), plus a freshness change that
-> left parity byte-identical.
-> **No round has ever tested the engine this kit currently ships.** That is the single
-> most important fact in this file, and it is why round 37 exists.
+> **READ THIS BEFORE PLANNING A ROUND: the repo and the instance disagree, on purpose.**
+> `main` carries **v0.26.0**. The instance serves **v0.21.0**. Round 38 failed v0.26.0
+> on a blocker in the customer-facing translation layer, and v0.26.0 and v0.25.0 were
+> DELETED from the instance on 2026-09-18 (HTTP 204 each, read back between). Their code
+> is intact on `main` at `2fae5e7` and `940e5e8` and can be re-published once the layer
+> is fixed.
+>
+> So: **do not assume the shipped version is the published one**, and do not read a green
+> suite as evidence that what customers receive is correct. Round 38's blocker passed
+> every suite in this repo.
+>
+> (Historical, now settled: rounds 25–36 ran against the engine at `b15b23d`; the kit has
+> vendored `6b0a897` since v0.20.0, and rounds 37 and 38 both tested it.)
 
 ---
 
-## STATE AS OF THIS FILE (2026-09-17 — all work is MERGED to `main`)
+## STATE AS OF THIS FILE (2026-09-18, after round 38)
 
-`main` carries PR #1 (`dc0a05e`), the runbook refresh, and **v0.20.0**. **`kit.json` and
-the built `dist/kit.zip` are at v0.20.0 and current** — unlike the last two times this
-file was written, the artifact is not stale.
+| | |
+|---|---|
+| `main` | `5a406df` — clean, pushed |
+| Repo version | **v0.26.0** (`kit.json` and `dist/kit.zip` current, not stale) |
+| **Instance serves** | **v0.21.0** — rolled back after round 38 |
+| Campaign | **round 38 FAIL — fourteenth consecutive** |
+
+**Two rollbacks in one day.** Round 37 failed v0.20.0 (an operator answer erased the
+customer's attachments from the whole run); it was fixed forward in v0.21.0 and v0.20.0
+was deleted. Round 38 then failed v0.26.0 on a worse defect and v0.26.0 + v0.25.0 were
+deleted, leaving v0.21.0 live.
+
+**What the rollback reinstated**, and what will therefore happen again until it is
+undone: the phantom assembly (a multi-line PO merged into one invented specification),
+the 9 KB reply, and the bare-HTML failure — job `2e07005c`, where the PO vanished from
+the run and the customer was asked to clarify a CSS font size.
+
+**`prepare_input.py` and the phase 1–2 fixes are NOT implicated in round 38's blocker**,
+which is confined to `config/questions.json` and `render_customer`. Rebuilding forward
+from v0.24.0 — keeping the multi-item detector, the transcript relocation, the delivery
+declaration and the input assembler, and redoing the customer email — is likely better
+than fixing v0.26.0 in place. **That decision is not made; make it first.**
 
 What landed since round 36, in order:
 
@@ -51,6 +76,24 @@ What landed since round 36, in order:
 - **v0.17.0 — REQ-097**: an unread attachment forces `outcome: needs_human_input` on
   its own. The operator's decision on the question v0.16.0 left open. An inline
   signature image does not force it; a scan that did not complete does.
+- **v0.26.0 — REQ-119/120**: `scripts/prepare_input.py` builds the `.eml` from what the
+  runtime ACTUALLY delivers — a body file plus `input/` attachments — and `run_engine.py`
+  refuses a bare HTML input. Fixes job `2e07005c`, where the PO vanished from the run and
+  a CSS font size became a customer question. **Not implicated in round 38's blocker.**
+- **v0.25.0 — REQ-116..118 (phase 3)**: `reply.md` became the CUSTOMER's email;
+  `config/questions.json` rewords open items (the ONE place that is permitted);
+  completeness moved to `--record`. **This is the layer round 38 failed.**
+- **v0.24.0 — REQ-114/115 (phase 5)**: `run_manifest.deliver` declares the customer's
+  source files for the REVIEWER's message; the customer reply still carries nothing. A
+  declaration only — Body must implement the attaching, and has not.
+- **v0.23.0 — REQ-112/113 (phase 2)**: the machine transcript moved out of the reply into
+  the review request; the reviewer's grounds became grounds rather than a document dump.
+- **v0.22.0 — REQ-111 (phase 1)**: `scripts/lineitems.py` — a document describing many
+  products is no longer presented as one specification. Two MEASURED thresholds
+  (`ROW_MIN=3` because a subtotal line matches the item pattern; `DIM_MIN=5` because a
+  hose-plus-reducer honestly names 3). **Known false negative, since confirmed by the
+  external review as D04:** a two-item list naming four dimensions is NOT flagged, and
+  the engine then captures quantity `1` from the list number.
 - **v0.21.0 — REQ-105..110**: four defects from a real production run (a PO sent as a
   PDF), three of them introduced the same day — including a recipe phase that forced an
   agent to hand-write a kit artifact, and a v0.19.0 defect where augmenting the case
@@ -76,17 +119,41 @@ What landed since round 36, in order:
   empty and renders NOT ROUTABLE rather than guessing. A full run now costs FIVE engine
   passes (extract 1, generate_report 2, render_reply 1, render_review 1).
 
-Suites at v0.21.0: selftest **251/251**, parity 7/7 (zero normalizations), golden 2/2,
-completeness 184 combinations / 0 violations, manifest valid.
-Mutation runs on the new work: **50 attempted, 49 caught**; the survivor is the
-defence-in-depth guard noted below. Two of the suite's OWN checks were exposed as
-unable to fail by these runs, and rewritten.
+Suites at v0.26.0 (the repo version): selftest **311/311**, parity 7/7 (zero
+normalizations), golden 3/3, completeness 184 combinations / 0 violations, manifest
+valid. Mutation runs across CW-1..CW-9 and the five PLAN_TURMOIL phases: **~90 attempted,
+all but one caught**, and the survivor is the defence-in-depth guard noted below —
+which round 37 then refuted as unkillable.
 
-### Nothing is carried forward as an open finding
+**Read that paragraph with round 38 in mind.** Every one of those numbers was green when
+the blocker shipped. The suites verify that each part does what it says; nothing in them
+compared the customer's QUESTIONS against the customer's ANSWERS, which is where the
+defect lived. A count of passing checks is not evidence about what a customer receives.
 
-Round 36's four open items are all closed and mutation-proved. There is no backlog to
-clear before round 37 — which is unusual for this campaign, and means the round starts
-clean rather than against a fix pass.
+### There is a LARGE backlog, from three sources
+
+Unlike round 37, this round does not start clean. Merge these before planning:
+
+1. **Round 38 — five blockers, two highs, four mediums** (`VERIFICATION_ROUND38.md`), all
+   in the translation layer. The blocker is a CLASS: five of the twenty-six
+   customer-facing translations fire only when a field is `reading`/`assumed`, and
+   `render_customer` prints only `captured` fields — so the questions and the answers
+   are disjoint by construction, and a customer confirming "yes" is confirming a number
+   they never saw. Two translations state the OPPOSITE of what the engine recorded.
+2. **Round 37 — ten unfixed findings** (`VERIFICATION_ROUND37.md`): M-2 (a marker in a
+   customer's own text fabricates an operator addendum — still live), M-3, H-2, H-3,
+   M-1, M-4, M-5, L-1..L-4.
+3. **An independent external review** — `/Users/axr/Desktop/McGill/CLAUDE_CODE_HANDOFF.md`,
+   12 findings (D01–D12) with reproductions, prepared 2026-09-17. Seven are ENGINE issues
+   for `McGill-Core` including a `ZeroDivisionError` crash on `1/0 inch`; five are kit.
+   D04, D06 and D08 were reproduced independently in-session. Its companion,
+   `KIT_CLOSURE_INFORMATION_CHECKLIST.md`, is a set of collection requests and decisions
+   for the operator, not claims.
+
+**Operator decision already taken:** fix D06 first — a shared typed formatter for units,
+`{value}` interpolation in `questions.json` filled from the field each open item names,
+summary stays captured-only and the unconfirmed value rides in the QUESTION. Round 38
+then showed D06 is bigger than formatting: seven codes are wrong on MEANING.
 
 ### Dormant by design — do not report as a defect
 
@@ -136,17 +203,23 @@ changed underneath. Then:
    the result reads like a vendor mismatch when nothing is wrong.
    `src/vendor/PROVENANCE.md` carries the stamp.
 
-2. **Run round 37.** There is no backlog to clear first. Aim it at the engine change:
-   rounds 25–36 tested `b15b23d`, and the shipped engine is now `ae4411f`. The
-   highest-value targets, in order:
-   - **the re-vendor itself** — size/length extraction on real-shaped threads, and
-     whether the four re-captured parity expecteds are right rather than merely
-     self-consistent (the old ones enshrined a live defect, which is the precedent);
-   - **`attachments.py` and the evidence block** — new code on the shipped path, and the
-     one place where a scan of the wrong file would put customer A's drawing on customer
-     B's reply (REQ-093 guards exactly that; try to get past it);
-   - **the run manifest** — whether `outcome` can disagree with the CaseState it came
-     from, and whether a failed run can leave one behind.
+2. **Settle the route back before writing code** — rebuild forward from v0.24.0, or fix
+   v0.26.0 in place. See the state section.
+
+3. **Work the backlog, not a round.** Round 39 comes AFTER the translation layer is
+   rebuilt; running it now would re-find what is already written down. When you do plan
+   it, aim it at whatever replaces `config/questions.json`, and at the two things round
+   38 proved about verification here:
+
+   - **a green suite is not evidence.** Round 38's blocker passed selftest 311/311,
+     parity, golden and completeness. The defect was two design decisions meeting —
+     captured-only summary, static question text — neither wrong alone, and no check
+     compared the questions against the answers.
+   - **the side-by-side mitigation works and closes nothing.** Round 38 confirmed
+     `render_review.py` renders the dishonest pairs honestly, and showed it does not
+     help: the review request's own instruction is "The response below is sent
+     UNCHANGED", so the default action is approve, and H-1's defects are invisible IN
+     the side-by-side.
 
 3. Only then consider publishing (see PUBLISHING).
 
@@ -247,11 +320,16 @@ new engine rather than the new checks. Say which when you report it.
 
 ## PUBLISHING
 
-**Live: v0.26.0** (2026-09-18T01:29Z, sha `fccdd43c515df397`), read back. The record
-holds 0.26.0, 0.25.0, 0.21.0, 0.14.0, 0.3.0, 0.2.0. **v0.20.0 — the version round 37
-failed — was deleted on 2026-09-18 (HTTP 204, read back).** Versions 0.22.0–0.26.0 have
-had NO verification round; see the warning below, which still stands and now covers
-five versions rather than one.
+**Live: v0.21.0** (sha `faac34e2cce8c5ce`), verified by independent read-back after the
+round-38 rollback. The record holds 0.21.0, 0.14.0, 0.3.0, 0.2.0.
+
+Deleted on 2026-09-18, each HTTP 204 with the record read back between: **v0.20.0**
+(round 37's blocker), then **v0.26.0** and **v0.25.0** (round 38's). `latest` is computed
+from the remaining versions — confirmed by deleting one at a time and checking, rather
+than assumed. Deletion is the documented rollback and has now worked five times.
+
+Nothing is lost by a rollback: every deleted version's code is on `main` and rebuildable.
+Re-publishing is a build plus a publish.
 
 The read-back also corrected a claim this file and PROJECT.md had both been making.
 The instance did **not** serve v0.3.0: its record shows four versions, and **v0.14.0
