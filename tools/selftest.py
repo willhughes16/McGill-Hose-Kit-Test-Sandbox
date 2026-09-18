@@ -1275,6 +1275,73 @@ P02386 HOS -012 HOSE, INSTAGRIP, 3/4" ID X 150', 300 PSI, 50 4.86 243.00
 PLEASE ACKNOWLEDGE AND PROVIDE BEST SHIP DATE"""
 
 
+print("PHASE 5 — the reviewer gets the customer's files; the customer gets none")
+# Operator decision 2026-09-18. The kit does not send email, so it DECLARES what
+# rides with which message and Body attaches it. The kit contract's
+# `email_attachment` tag cannot express this: at most one artifact may carry it,
+# it attaches to the REPLY, and it can only name an artifact the kit produced —
+# never the customer's own PDF, which is a MIME part and not a file the kit writes.
+d = tempfile.mkdtemp()
+os.makedirs(os.path.join(d, "_report"), exist_ok=True)
+attach_eml(d, "rfq.eml", "Need 4 hoses per the attached drawing. 316 SS, steam.",
+           [("drawing-rev-C.pdf", "application", "pdf", b"%PDF-1.4 d" * 50)],
+           [("signature-logo.png", "image", "png", b"\x89PNG")])
+prepare(d, "rfq.eml")
+phase1(d, "rfq.eml")
+sh([REPLY, "--state", "_report/state.json"], d)
+sh([REVIEW, "--state", "_report/state.json"], d)
+deliver = (read_json(d, "run_manifest.json").get("deliver") or {})
+to_reviewer = [f["filename"] for f in
+               (deliver.get("review_request") or {}).get("attach") or []]
+check("the customer's file is declared for the REVIEWER",
+      to_reviewer == ["drawing-rev-C.pdf"], f"declared={to_reviewer}")
+check("the customer's reply declares NOTHING",
+      ((deliver.get("reply") or {}).get("attach") or []) == [],
+      "unchanged: the whole case goes in the body")
+check("a signature logo is NOT declared — 'only relevant attachments'",
+      "signature-logo.png" not in to_reviewer)
+check("each declared file carries its sha256, so Body attaches the right bytes",
+      all(f.get("sha256") for f in
+          (deliver.get("review_request") or {}).get("attach") or []))
+# Scoped to the SENT WITH block. A bare `in review_header(d)` passed with the
+# whole section deleted, because the filename also appears in the UNREAD ground
+# eight lines above — the third coincidence-match of the day, and again only the
+# mutation run found it.
+_sent = []
+_in = False
+for _l in read(d, "review_request.md").splitlines():
+    if _l.startswith("SENT WITH THIS REVIEW"):
+        _in = True
+    elif _in and _l[:1].isupper() and _l.strip() and not _l.startswith(" "):
+        break
+    elif _in:
+        _sent.append(_l)
+check("the review request names the file it should arrive with",
+      any("drawing-rev-C.pdf" in l for l in _sent),
+      "the SENT WITH section is where a reviewer looks for what they were sent")
+check("and the reply does not — it is the customer's email",
+      "SENT WITH THIS REVIEW" not in read(d, "reply.md"))
+check("the declaration says who must implement it",
+      deliver.get("implemented_by") == "body",
+      "a declaration nothing acts on must say so")
+_reason = ((deliver.get("review_request") or {}).get("attach") or [{}])[0].get("reason", "")
+check("an UNREAD file says nobody read it", "nobody read it" in _reason,
+      f"reason={_reason!r}")
+shutil.rmtree(d)
+
+print("PHASE 5b — a message with no attachments declares nothing")
+d = workdir(("rfq.eml", "plain-steam"))
+prepare(d, "rfq.eml")
+phase1(d, "rfq.eml")
+sh([REPLY, "--state", "_report/state.json"], d)
+sh([REVIEW, "--state", "_report/state.json"], d)
+check("nothing is declared for either message",
+      ((read_json(d, "run_manifest.json").get("deliver") or {})
+       .get("review_request") or {}).get("attach") == [])
+check("and the review request has no SENT WITH section",
+      "SENT WITH THIS REVIEW" not in read(d, "review_request.md"))
+shutil.rmtree(d)
+
 print("PHASE 1 — a document describing MANY products must not be presented as one")
 # Job af54e714, 2026-09-18. A twenty-line purchase order became a single
 # hose_assembly whose size and pressure came off the HOSE line, whose length came

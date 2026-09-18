@@ -117,7 +117,7 @@ That means:
 
 Phases 1–3 are independent of this and should not wait for it.
 
-### Phase 5 — Source files ride with the reviewer's message (kit + Body)
+### Phase 5 — Source files ride with the reviewer's message — **KIT HALF DONE, v0.24.0; BODY HALF OUTSTANDING**
 
 The kit does not send email; Body does. So the kit DECLARES what should be
 attached to which message, and Body attaches it:

@@ -806,6 +806,32 @@ features are now in:
   result: no FAIL lines can mean the check is vacuous OR that the suite never got
   there.
 
+### v0.24.0 — phase 5: the reviewer gets the customer's files
+
+- REQ-114 **`run_manifest.deliver` declares what rides with which message.** The
+  operator's decision: the reviewer's message carries the customer's source files
+  so a transcript can be checked against its original; the customer's reply carries
+  nothing, unchanged. Each declared file is identified by filename AND sha256 so
+  Body attaches the right bytes, and carries a reason that distinguishes "the
+  transcript was read from this" from "nobody read it". `embedded` parts are
+  excluded — a signature logo is not evidence, and the instruction was *only
+  relevant attachments*.
+- REQ-115 **Why this is not an `email_attachment` tag, recorded because the
+  contract cannot express it.** The kit manifest has that tag on
+  `outputs.artifacts[]`, and three things make it unusable here: at most ONE
+  artifact per kit may carry it, it attaches to the REPLY rather than the review,
+  and it can only name an artifact the KIT produced — never the customer's own PDF,
+  which is a MIME part inside their message and not a file the kit ever writes. So
+  the intent is declared in the run record instead, `implemented_by: "body"` is
+  stated in the block itself, and the review request tells the reviewer to ask for
+  the files if they did not arrive. **A declaration nothing acts on yet is honest
+  only if it says so.** The bar's "zero `email_attachment` tags" invariant is
+  therefore unchanged and still true.
+  **Mutation-proved:** 6 mutations, 6 caught — after one survived because the check
+  matched the filename in an `UNREAD` ground eight lines above the section it named.
+  That is the third coincidence-match found by mutation today, and the third the
+  author did not see by reading.
+
 ### v0.23.0 — phase 2: the transcript goes where it is useful
 
 - REQ-112 **`reply.md` names the transcribed file; `review_request.md` carries the

@@ -100,6 +100,11 @@ line:
   to confirm those fields, and do not present them as what the customer ordered.
   A purchase order usually needs an acknowledgement and a ship date, not a
   specification review.
+- **The customer's files go with the REVIEWER's message, not the customer's.**
+  `run_manifest.deliver` names them; the reply still attaches nothing. The kit does
+  not send email, so this is a DECLARATION and Body must implement the attaching —
+  until it does, the reviewer may be asked to check a transcript against a file they
+  were not sent, and the review request says so.
 - **The transcript belongs in the review request, not the reply.** `reply.md`
   names the file and the method; `review_request.md` carries the text verbatim so a
   reviewer can check it against the original. Do not paste a transcript into a

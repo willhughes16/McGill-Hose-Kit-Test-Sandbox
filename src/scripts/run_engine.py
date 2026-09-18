@@ -115,6 +115,49 @@ def run_engine(invocation, as_json=True):
     return buf.getvalue(), engine_exit
 
 
+def build_delivery(evidence, transcripts):
+    """Which files should ride with which message (phase 5).
+
+    The kit does not send email; Body does. So the kit names the files and Body
+    attaches them. The operator's decision, 2026-09-18: the reviewer's message
+    carries the customer's source files so the transcript can be checked against
+    the original; the customer's reply carries nothing, which is unchanged.
+
+    WHY THIS IS NOT A `email_attachment` TAG. The kit contract has one, on
+    `outputs.artifacts[]`, and it cannot express this: at most ONE artifact per
+    kit may carry it, it attaches to the REPLY, and it can only name an artifact
+    the kit produced — never the customer's own PDF, which is a MIME part inside
+    their message and not a file the kit ever writes. So the intent is declared
+    here, in the run record, identified by filename and sha256, and BODY MUST
+    IMPLEMENT THE ATTACHING. Until it does, this block is a statement of intent
+    that nothing acts on, and saying so is better than a tag that would attach
+    the wrong file to the wrong message.
+
+    `embedded` parts are deliberately excluded: a signature logo is not evidence,
+    and "only relevant attachments" was the instruction.
+    """
+    named = {str(t.get("filename")) for t in (transcripts or [])}
+    attach = []
+    for f in (evidence or {}).get("attachments") or []:
+        filename = str(f.get("filename"))
+        attach.append({
+            "filename": filename,
+            "sha256": f.get("sha256"),
+            "bytes": f.get("bytes"),
+            "source": "customer_attachment",
+            "reason": ("the transcript in this review was read from it — check it "
+                       "against the original"
+                       if filename in named else
+                       "nobody read it: the engine cannot, and no transcript was "
+                       "supplied"),
+        })
+    return {
+        "reply": {"audience": "customer", "attach": []},
+        "review_request": {"audience": "reviewer", "attach": attach},
+        "implemented_by": "body",
+    }
+
+
 def build_manifest(case, invocation, paths, engine_exit, started, elapsed_ms,
                    state_record=None):
     """The run record: who produced this case, from what, and what it needs.
@@ -205,6 +248,9 @@ def build_manifest(case, invocation, paths, engine_exit, started, elapsed_ms,
         # Is this ONE request or a list of many? The engine cannot tell and does
         # not try; it builds a single specification either way (phase 1).
         "line_items": {k: v for k, v in _line_items.items() if k != "rows"},
+        # What should ride with which message (phase 5). A DECLARATION: the kit
+        # does not send email, and Body must implement the attaching.
+        "deliver": build_delivery(evidence, _transcript_records),
         "transcripts": _transcript_records,
         "transcribed_fields": sorted(
             name for name, verdict in answers_mod.sourced_fields(

@@ -68,8 +68,8 @@ import attachments  # noqa: E402
 import lineitems  # noqa: E402
 import routing as routing_table  # noqa: E402  (not the CaseState's `routing` key)
 import render_reply  # noqa: E402
-from render_reply import _safe, is_unconfirmed  # noqa: E402
-from run_engine import run_engine, warn_if_slow  # noqa: E402
+from render_reply import _bytes, _safe, is_unconfirmed  # noqa: E402
+from run_engine import build_delivery, run_engine, warn_if_slow  # noqa: E402
 from run_state import (  # noqa: E402
     ARTIFACTS, StateError, artifact_path, derive_outcome, idempotency_key,
     input_sha256, invalidate, normalize_invocation, read_state, source_input,
@@ -168,7 +168,7 @@ def _uncertainty(case, evidence, case_text, transcribed=(), line_items=None,
 
 
 def render(case, evidence, reply_body, invocation, addressees, table_error,
-           case_text=None, transcripts=None, line_items=None):
+           case_text=None, transcripts=None, line_items=None, delivery=None):
     """Build the review request. Pure function of what it is handed."""
     outcome, reason = derive_outcome(
         case, evidence,
@@ -237,6 +237,23 @@ def render(case, evidence, reply_body, invocation, addressees, table_error,
     L.append("    appears it is the customer's own words quoted back.")
     L.append("  - This is a draft. A human commits it in the ERP.")
     L.append("")
+
+    # What should arrive WITH this review request. Named here as well as in the
+    # manifest because a reviewer told to check a transcript against the original
+    # needs to know whether they were sent the original.
+    attach = ((delivery or {}).get("review_request") or {}).get("attach") or []
+    if attach:
+        L.append("SENT WITH THIS REVIEW — the customer's own files, so you can "
+                 "check what a machine read")
+        L.append("")
+        for f in attach:
+            L.append(f"  {_safe(f.get('filename'))}  ({_bytes(f.get('bytes'))})"
+                     f" — {_safe(f.get('reason'))}")
+        L.append("")
+        L.append("  If these did not arrive, ask for them before approving: a "
+                 "transcript nobody can")
+        L.append("  check against its source is a claim, not evidence.")
+        L.append("")
 
     # The transcript, verbatim, as its own section. Here and not in the reply
     # (phase 2): the reviewer is the one who checks a machine's reading against
@@ -366,7 +383,10 @@ def main(argv=None):
     body = render(case, evidence, reply_body, invocation, addressees,
                   table_error, case_text,
                   (read_state(args.state).get('transcripts') or {}).get('records'),
-                  lineitems.scan_file(invocation["input"]) if invocation else None)
+                  lineitems.scan_file(invocation["input"]) if invocation else None,
+                  build_delivery(evidence,
+                                 (read_state(args.state).get('transcripts') or {})
+                                 .get('records')))
     try:
         os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
         with open(out, "w", encoding="utf-8") as fh:
